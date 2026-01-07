@@ -85,7 +85,7 @@ struct AVConsumer::Impl {
 			},
 			10);
 
-		audioConsumer = std::make_unique<SharedMemoryConsumer>(
+				audioConsumer = std::make_unique<SharedMemoryConsumer>(
 			audioShm, audioSem, audioSize,
 			[](const unsigned char* buffer, size_t size) {
 				// Expect header: uint64_t timestamp + uint32_t payload_size
@@ -97,7 +97,7 @@ struct AVConsumer::Impl {
 				uint32_t payload = 0;
 				std::memcpy(&ts, buffer, sizeof(uint64_t));
 				std::memcpy(&payload, buffer + sizeof(uint64_t), sizeof(uint32_t));
-				//std::cout << "[AVConsumer] Audio timestamp=" << ts << ", payloadSize=" << payload << std::endl;
+					std::cout << "[OAT][Audio] timestamp=" << ts << std::endl;
 			},
 			10);
 

@@ -25,6 +25,19 @@
       ],
       "preLaunchTask": "docker: flutter build linux (example)",
       "externalConsole": false
+    },
+    {
+      "name": "Clean example bundle (docker)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "/usr/bin/env",
+      "args": ["true"],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "preLaunchTask": "docker: flutter clean (example)",
+      "externalConsole": false
     }
   ]
 }

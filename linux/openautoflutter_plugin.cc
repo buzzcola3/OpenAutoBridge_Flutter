@@ -2,6 +2,7 @@
 #include "av/oa_video_texture.h"
 #include "av/h264_decoder.h"
 #include "transport.hpp"
+#include "oat_transport.hpp"
 #include "wire.hpp"
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
@@ -20,7 +21,6 @@
 #include <vector>
 #include <string>
 
-using OATransport = buzz::autoapp::Transport::Transport;
 using OAMsgType = buzz::wire::MsgType;
 
 #include "openautoflutter_plugin_private.h"
@@ -132,7 +132,8 @@ struct _OpenautoflutterPlugin {
   GObject parent_instance;
   OAVideoTexture* video_texture;
   int64_t texture_id;
-  std::unique_ptr<OATransport> transport; // OpenAutoTransport receiver
+  std::unique_ptr<OatTransport> transport; // OpenAutoTransport receiver
+  std::unique_ptr<OatMessageLogger> message_logger;
   std::shared_ptr<H264Decoder> decoder; // shared to keep alive beyond plugin lifetime
 
   struct VideoFrameState {
@@ -298,13 +299,13 @@ static void openautoflutter_plugin_dispose(GObject* object) {
     self->frame_timer_id = 0;
   }
   if (self->transport) {
+    self->message_logger.reset();
+    self->transport->clearStatusCallback();
     self->transport->stop();
+    self->transport.reset();
   }
   if (self->video_texture != nullptr) {
     g_clear_object(&self->video_texture);
-  }
-  if (self->transport) {
-    self->transport.reset();
   }
   self->decoder.reset();
   G_OBJECT_CLASS(openautoflutter_plugin_parent_class)->dispose(object);
@@ -317,32 +318,36 @@ static void openautoflutter_plugin_class_init(OpenautoflutterPluginClass* klass)
 static void openautoflutter_plugin_init(OpenautoflutterPlugin* self) {
   self->video_texture = nullptr;
   self->texture_id = 0;
-  self->transport = std::make_unique<OATransport>();
+  self->transport = std::make_unique<OatTransport>();
   self->decoder = std::make_shared<H264Decoder>();
   self->frame_state = std::make_shared<VideoFrameState>();
   self->texture_registrar = nullptr;
   self->frame_timer_id = 0;
 
-  // Start as Side B (joiner) with explicit 5s wait and 1ms poll.
+  // Start as Side B (joiner) with explicit 5s wait and 1000us poll.
   g_message("OAT: starting transport as Side B (wait=5000ms poll=1000us)");
-  if (!self->transport->startAsB(std::chrono::milliseconds{5000}, std::chrono::microseconds{1000})) {
+  if (!self->transport->startAsB(5000, 1000)) {
     g_warning("OAT: startAsB failed");
   } else {
-    g_message("OAT: transport started (side=%d, running=%d)", static_cast<int>(self->transport->side()),
-              self->transport->isRunning() ? 1 : 0);
-    // Register handler for VIDEO messages: strip header if present, decode, stash latest.
-    auto decoder = self->decoder;
-    auto state = self->frame_state;
-    g_object_ref(self); // keep plugin alive while transport callbacks run
-    auto self_shared = std::shared_ptr<OpenautoflutterPlugin>(
-      self,
-      [](OpenautoflutterPlugin* p){ g_object_unref(p); });
+    g_message("OAT: transport started (side=%d, running=%d)", static_cast<int>(self->transport->side()), self->transport->isRunning() ? 1 : 0);
+    self->message_logger = std::make_unique<OatMessageLogger>(*self->transport);
+    self->message_logger->install();
 
-    self->transport->addTypeHandler(static_cast<OAMsgType>(OAMsgType::VIDEO),
-      [decoder, state, self_shared](uint64_t /*ts*/, const void* data, std::size_t size) {
-        if (!data || size == 0 || !decoder || !state || !self_shared) return;
-        state->ingest_packet(static_cast<const uint8_t*>(data), size, *decoder);
-      });
+    auto* transport_ptr = self->transport.get();
+    self->transport->setStatusCallback([transport_ptr]() {
+      if (!transport_ptr) return;
+      const char* side = "Unknown";
+      switch (transport_ptr->side()) {
+        case OatTransport::Side::A: side = "A"; break;
+        case OatTransport::Side::B: side = "B"; break;
+        default: break;
+      }
+      std::cout << "[OAT][Status] running=" << (transport_ptr->isRunning() ? 1 : 0)
+                << " side=" << side
+                << " sent=" << transport_ptr->sentCount()
+                << " dropped=" << transport_ptr->dropCount()
+                << std::endl;
+    }, 5);
   }
 }
 

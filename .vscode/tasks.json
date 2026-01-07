@@ -20,6 +20,17 @@
         "isDefault": true
       },
       "problemMatcher": []
+    },
+    {
+      "label": "docker: flutter clean (example)",
+      "type": "shell",
+      "command": "docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder flutter clean",
+      "dependsOn": "docker: build builder image",
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "problemMatcher": []
     }
   ]
 }
