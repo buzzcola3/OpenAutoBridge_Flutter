@@ -21,7 +21,7 @@ set(PLUGIN_NAME "openautoflutter_plugin")
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
   "openautoflutter_plugin.cc"
-  "oat_transport.cpp"
+  "oat_message_handlers.cpp"
   "av/oa_video_texture.cc"
   "common/SharedMemoryConsumer.cpp"
   "av/h264_decoder.cc"

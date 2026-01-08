@@ -22,4 +22,3 @@ private:
 	struct Impl;
 	Impl* impl_;
 };
-
