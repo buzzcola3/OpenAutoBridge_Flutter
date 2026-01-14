@@ -20,8 +20,8 @@
 #include <vector>
 #include <string>
 
-using OAMsgType = buzz::wire::MsgType;
 using NativeTransport = buzz::autoapp::Transport::Transport;
+using TouchPayload = NativeTransport::TouchEventPayload;
 
 #include "openautoflutter_plugin_private.h"
 
@@ -33,15 +33,6 @@ enum class TouchAction : uint32_t {
   POINTER_DOWN = 3,
   POINTER_UP = 4,
 };
-
-struct TouchMessage {
-  float x;
-  float y;
-  uint32_t pointer_id;
-  uint32_t action;
-};
-
-static_assert(sizeof(TouchMessage) == 16, "TouchMessage layout unexpected");
 
 double get_number(FlValue* value, bool& ok) {
   ok = false;
@@ -58,7 +49,7 @@ double get_number(FlValue* value, bool& ok) {
   }
 }
 
-bool parse_touch_args(FlValue* args, TouchMessage& out, std::string& error) {
+bool parse_touch_args(FlValue* args, TouchPayload& out, std::string& error) {
   if (!args || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
     error = "Args must be a map";
     return false;
@@ -105,7 +96,7 @@ bool parse_touch_args(FlValue* args, TouchMessage& out, std::string& error) {
 
   out.x = static_cast<float>(clamp01(x));
   out.y = static_cast<float>(clamp01(y));
-  out.pointer_id = pid_val < 0 ? 0u : static_cast<uint32_t>(pid_val);
+  out.pointerId = pid_val < 0 ? 0u : static_cast<uint32_t>(pid_val);
   out.action = static_cast<uint32_t>(action_enum);
   return true;
 }
@@ -142,7 +133,7 @@ static void openautoflutter_plugin_handle_method_call(
     g_autoptr(FlValue) result = fl_value_new_int(self->texture_id);
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } else if (strcmp(method, "sendTouchEvent") == 0) {
-    TouchMessage touch_msg{};
+    TouchPayload touch_msg{};
     std::string error;
     if (!parse_touch_args(fl_method_call_get_args(method_call), touch_msg, error)) {
       response = FL_METHOD_RESPONSE(fl_method_error_response_new("invalid_args", error.c_str(), nullptr));
@@ -150,7 +141,7 @@ static void openautoflutter_plugin_handle_method_call(
       const auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::steady_clock::now().time_since_epoch()).count();
       if (self->transport && self->transport->isRunning()) {
-        self->transport->send(OAMsgType::TOUCH, static_cast<uint64_t>(now_us), &touch_msg, sizeof(touch_msg));
+        self->transport->sendTouch(static_cast<uint64_t>(now_us), touch_msg);
       } else {
         g_warning("OAT: transport not running; dropping touch event");
       }
