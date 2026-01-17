@@ -50,7 +50,9 @@ class Openautoflutter {
     );
   }
 
-  /// Sends a JSON string for sensor location data with the structure:
+  /// Sends a JSON string for one of the supported sensor payloads:
+  ///
+  /// Location:
   /// {
   ///   "location": {
   ///     "latitude": 37.7749,
@@ -61,6 +63,18 @@ class Openautoflutter {
   ///     "bearing_deg": 90.0
   ///   }
   /// }
+  /// Required: latitude, longitude
+  /// Optional: accuracy_m, altitude_m, speed_mps, bearing_deg
+  ///
+  /// Night mode:
+  /// { "night_mode": { "enabled": true } }
+  /// Required: enabled (boolean)
+  ///
+  /// Driving status:
+  /// { "driving_status": { "status": "no_video" } }
+  /// Required: status (string)
+  /// Allowed values: unrestricted, no_video, no_keyboard_input,
+  ///   no_voice_input, no_config, limit_message_len
   Future<void> sendSensorJson(String json) {
     return OpenautoflutterPlatform.instance.sendSensorJson(json);
   }

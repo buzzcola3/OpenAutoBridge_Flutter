@@ -84,6 +84,24 @@ class _MyAppState extends State<MyApp> {
     await _openautoflutterPlugin.sendSensorJson(payload);
   }
 
+  Future<void> _sendNightModeSample() async {
+    final payload = jsonEncode({
+      'night_mode': {
+        'enabled': true,
+      },
+    });
+    await _openautoflutterPlugin.sendSensorJson(payload);
+  }
+
+  Future<void> _sendDrivingStatusSample() async {
+    final payload = jsonEncode({
+      'driving_status': {
+        'status': 'no_video',
+      },
+    });
+    await _openautoflutterPlugin.sendSensorJson(payload);
+  }
+
   void _handlePointerDown(PointerDownEvent event) {
     final bool isFirst = _activePointers.isEmpty;
     _activePointers.add(event.pointer);
@@ -131,6 +149,16 @@ class _MyAppState extends State<MyApp> {
                   ElevatedButton(
                     onPressed: _sendSensorSample,
                     child: const Text('Send sensor JSON'),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: _sendNightModeSample,
+                    child: const Text('Send night mode JSON'),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: _sendDrivingStatusSample,
+                    child: const Text('Send driving status JSON'),
                   ),
                   const SizedBox(height: 8),
                   // Render the native GL video texture with flex to avoid overflow.
