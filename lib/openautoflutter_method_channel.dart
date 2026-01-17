@@ -35,4 +35,11 @@ class MethodChannelOpenautoflutter extends OpenautoflutterPlatform {
       'action': actionCode,
     });
   }
+
+  @override
+  Future<void> sendSensorJson(String json) async {
+    await methodChannel.invokeMethod<void>('sendSensorJson', <String, dynamic>{
+      'json': json,
+    });
+  }
 }

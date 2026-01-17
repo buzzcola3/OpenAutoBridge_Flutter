@@ -10,6 +10,24 @@ class MockOpenautoflutterPlatform
 
   @override
   Future<String?> getPlatformVersion() => Future.value('42');
+
+  @override
+  Future<int?> getVideoTextureId() => Future.value(7);
+
+  @override
+  Future<void> sendTouchEvent({
+    required int pointerId,
+    required double x,
+    required double y,
+    required int actionCode,
+  }) {
+    return Future.value();
+  }
+
+  @override
+  Future<void> sendSensorJson(String json) {
+    return Future.value();
+  }
 }
 
 void main() {

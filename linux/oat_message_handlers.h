@@ -24,6 +24,7 @@ public:
 
   void install();
   bool handleTouchMethod(FlValue* args, std::string& error);
+  bool handleSensorMethod(FlValue* args, std::string& error);
 
 private:
   struct VideoState {

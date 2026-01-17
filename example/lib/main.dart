@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:openautoflutter/openautoflutter.dart';
@@ -69,6 +70,20 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  Future<void> _sendSensorSample() async {
+    final payload = jsonEncode({
+      'location': {
+        'latitude': 37.7749,
+        'longitude': -122.4194,
+        'accuracy_m': 5.0,
+        'altitude_m': 15.0,
+        'speed_mps': 13.4,
+        'bearing_deg': 90.0,
+      },
+    });
+    await _openautoflutterPlugin.sendSensorJson(payload);
+  }
+
   void _handlePointerDown(PointerDownEvent event) {
     final bool isFirst = _activePointers.isEmpty;
     _activePointers.add(event.pointer);
@@ -112,6 +127,11 @@ class _MyAppState extends State<MyApp> {
                   const Text('Texture not available')
                 else ...[
                   Text('Texture ID: $_videoTextureId'),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: _sendSensorSample,
+                    child: const Text('Send sensor JSON'),
+                  ),
                   const SizedBox(height: 8),
                   // Render the native GL video texture with flex to avoid overflow.
                   Flexible(

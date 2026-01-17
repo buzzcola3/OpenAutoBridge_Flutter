@@ -49,4 +49,19 @@ class Openautoflutter {
       actionCode: action.code,
     );
   }
+
+  /// Sends a JSON string for sensor location data with the structure:
+  /// {
+  ///   "location": {
+  ///     "latitude": 37.7749,
+  ///     "longitude": -122.4194,
+  ///     "accuracy_m": 5.0,
+  ///     "altitude_m": 15.0,
+  ///     "speed_mps": 13.4,
+  ///     "bearing_deg": 90.0
+  ///   }
+  /// }
+  Future<void> sendSensorJson(String json) {
+    return OpenautoflutterPlatform.instance.sendSensorJson(json);
+  }
 }

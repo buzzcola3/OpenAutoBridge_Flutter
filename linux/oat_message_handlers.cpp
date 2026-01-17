@@ -90,6 +90,30 @@ bool parse_touch_args(FlValue* args, TouchPayload& out, std::string& error) {
     out.action = static_cast<uint32_t>(action_enum);
     return true;
 }
+
+bool parse_sensor_args(FlValue* args, std::string& json, std::string& error) {
+    if (!args) {
+        error = "Args are required";
+        return false;
+    }
+    if (fl_value_get_type(args) == FL_VALUE_TYPE_STRING) {
+        json = fl_value_get_string(args);
+        return true;
+    }
+    if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+        error = "Args must be a map";
+        return false;
+    }
+
+    FlValue* json_value = fl_value_lookup_string(args, "json");
+    if (!json_value || fl_value_get_type(json_value) != FL_VALUE_TYPE_STRING) {
+        error = "Missing or invalid json";
+        return false;
+    }
+
+    json = fl_value_get_string(json_value);
+    return true;
+}
 } // namespace
 
 OatMessageHandlers::OatMessageHandlers(NativeTransport& transport,
@@ -175,6 +199,25 @@ bool OatMessageHandlers::handleTouchMethod(FlValue* args, std::string& error) {
         transport_.sendTouch(static_cast<uint64_t>(now_us), touch_msg);
     } else {
         g_warning("OAT: transport not running; dropping touch event");
+    }
+    return true;
+}
+
+bool OatMessageHandlers::handleSensorMethod(FlValue* args, std::string& error) {
+    std::string json;
+    if (!parse_sensor_args(args, json, error)) {
+        return false;
+    }
+
+    const auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (transport_.isRunning()) {
+        transport_.send(buzz::wire::MsgType::SENSOR,
+                        static_cast<uint64_t>(now_us),
+                        json.data(),
+                        json.size());
+    } else {
+        g_warning("OAT: transport not running; dropping sensor event");
     }
     return true;
 }

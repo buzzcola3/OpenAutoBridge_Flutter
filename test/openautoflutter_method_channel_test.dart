@@ -7,11 +7,13 @@ void main() {
 
   MethodChannelOpenautoflutter platform = MethodChannelOpenautoflutter();
   const MethodChannel channel = MethodChannel('openautoflutter');
+  MethodCall? lastCall;
 
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
       (MethodCall methodCall) async {
+        lastCall = methodCall;
         if (methodCall.method == 'getPlatformVersion') {
           return '42';
         }
@@ -33,5 +35,11 @@ void main() {
 
   test('getVideoTextureId', () async {
     expect(await platform.getVideoTextureId(), 7);
+  });
+
+  test('sendSensorJson', () async {
+    await platform.sendSensorJson('{"hello":"world"}');
+    expect(lastCall?.method, 'sendSensorJson');
+    expect(lastCall?.arguments, <String, dynamic>{'json': '{"hello":"world"}'});
   });
 }

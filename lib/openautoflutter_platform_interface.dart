@@ -39,4 +39,8 @@ abstract class OpenautoflutterPlatform extends PlatformInterface {
   }) {
     throw UnimplementedError('sendTouchEvent() has not been implemented.');
   }
+
+  Future<void> sendSensorJson(String json) {
+    throw UnimplementedError('sendSensorJson() has not been implemented.');
+  }
 }
