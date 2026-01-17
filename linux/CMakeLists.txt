@@ -60,8 +60,8 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE epoxy)
 find_package(Threads REQUIRED)
 target_link_libraries(${PLUGIN_NAME} PRIVATE Threads::Threads)
 
-## OpenAutoTransport (prebuilt) fetch + link (v0.0.22)
-set(OPENAUTO_TRANSPORT_VERSION "v0.0.22" CACHE STRING "OpenAutoTransport release tag" FORCE)
+## OpenAutoTransport (prebuilt) fetch + link
+set(OPENAUTO_TRANSPORT_VERSION "v0.0.24" CACHE STRING "OpenAutoTransport release tag" FORCE)
 if(NOT DEFINED OPENAUTO_TRANSPORT_VARIANT)
   string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _proc)
   if(_proc MATCHES "x86_64|amd64")

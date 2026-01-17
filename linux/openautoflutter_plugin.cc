@@ -21,86 +21,10 @@
 #include <string>
 
 using NativeTransport = buzz::autoapp::Transport::Transport;
-using TouchPayload = NativeTransport::TouchEventPayload;
 
 #include "openautoflutter_plugin_private.h"
 
-namespace {
-enum class TouchAction : uint32_t {
-  DOWN = 0,
-  UP = 1,
-  MOVED = 2,
-  POINTER_DOWN = 3,
-  POINTER_UP = 4,
-};
 
-double get_number(FlValue* value, bool& ok) {
-  ok = false;
-  if (!value) return 0.0;
-  switch (fl_value_get_type(value)) {
-    case FL_VALUE_TYPE_INT:
-      ok = true;
-      return static_cast<double>(fl_value_get_int(value));
-    case FL_VALUE_TYPE_FLOAT:
-      ok = true;
-      return fl_value_get_float(value);
-    default:
-      return 0.0;
-  }
-}
-
-bool parse_touch_args(FlValue* args, TouchPayload& out, std::string& error) {
-  if (!args || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
-    error = "Args must be a map";
-    return false;
-  }
-
-  bool ok = false;
-  const double x = get_number(fl_value_lookup_string(args, "x"), ok);
-  if (!ok) {
-    error = "Missing or invalid x";
-    return false;
-  }
-  const double y = get_number(fl_value_lookup_string(args, "y"), ok);
-  if (!ok) {
-    error = "Missing or invalid y";
-    return false;
-  }
-  const double pid_val = get_number(fl_value_lookup_string(args, "pointerId"), ok);
-  if (!ok) {
-    error = "Missing or invalid pointerId";
-    return false;
-  }
-  const double action_val = get_number(fl_value_lookup_string(args, "action"), ok);
-  if (!ok) {
-    error = "Missing or invalid action";
-    return false;
-  }
-
-  const int64_t action_i = static_cast<int64_t>(action_val);
-  TouchAction action_enum;
-  switch (action_i) {
-    case 0: action_enum = TouchAction::DOWN; break;
-    case 1: action_enum = TouchAction::UP; break;
-    case 2: action_enum = TouchAction::MOVED; break;
-    case 3: action_enum = TouchAction::POINTER_DOWN; break;
-    case 4: action_enum = TouchAction::POINTER_UP; break;
-    default:
-      error = "Unsupported action code";
-      return false;
-  }
-
-  const auto clamp01 = [](double v) {
-    return std::clamp(v, 0.0, 1.0);
-  };
-
-  out.x = static_cast<float>(clamp01(x));
-  out.y = static_cast<float>(clamp01(y));
-  out.pointerId = pid_val < 0 ? 0u : static_cast<uint32_t>(pid_val);
-  out.action = static_cast<uint32_t>(action_enum);
-  return true;
-}
-} // namespace
 
 #define OPENAUTOFLUTTER_PLUGIN(obj) \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), openautoflutter_plugin_get_type(), \
@@ -133,18 +57,12 @@ static void openautoflutter_plugin_handle_method_call(
     g_autoptr(FlValue) result = fl_value_new_int(self->texture_id);
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } else if (strcmp(method, "sendTouchEvent") == 0) {
-    TouchPayload touch_msg{};
     std::string error;
-    if (!parse_touch_args(fl_method_call_get_args(method_call), touch_msg, error)) {
+    if (!self->handlers) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("not_ready", "Handlers not initialized", nullptr));
+    } else if (!self->handlers->handleTouchMethod(fl_method_call_get_args(method_call), error)) {
       response = FL_METHOD_RESPONSE(fl_method_error_response_new("invalid_args", error.c_str(), nullptr));
     } else {
-      const auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
-          std::chrono::steady_clock::now().time_since_epoch()).count();
-      if (self->transport && self->transport->isRunning()) {
-        self->transport->sendTouch(static_cast<uint64_t>(now_us), touch_msg);
-      } else {
-        g_warning("OAT: transport not running; dropping touch event");
-      }
       response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
     }
   } else {

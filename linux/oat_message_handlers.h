@@ -23,6 +23,7 @@ public:
                      FlTextureRegistrar* registrar);
 
   void install();
+  bool handleTouchMethod(FlValue* args, std::string& error);
 
 private:
   struct VideoState {
