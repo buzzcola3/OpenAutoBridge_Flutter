@@ -14,7 +14,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            flutter_arch: x64
+            platform: linux/amd64
+            image: openautoflutter-builder
+          - arch: arm64
+            flutter_arch: arm64
+            platform: linux/arm64
+            image: openautoflutter-builder-arm64
 
     steps:
       - name: Checkout
@@ -31,31 +39,31 @@ jobs:
       - name: Build builder image (${{ matrix.arch }})
         run: |
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            docker buildx build --platform linux/arm64 -t openautoflutter-builder-arm64 --load .
+            docker buildx build --platform ${{ matrix.platform }} -t ${{ matrix.image }} --load .
           else
-            docker build -t openautoflutter-builder .
+            docker build -t ${{ matrix.image }} .
           fi
 
       - name: Build example app (${{ matrix.arch }})
         run: |
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            docker run --rm -t --platform linux/arm64 \
+            docker run --rm -t --platform ${{ matrix.platform }} \
               -v "$PWD:/workspace" \
               -w /workspace/example \
-              openautoflutter-builder-arm64 \
+              ${{ matrix.image }} \
               flutter build linux -v
           else
             docker run --rm -t \
               -v "$PWD:/workspace" \
               -w /workspace/example \
-              openautoflutter-builder \
+              ${{ matrix.image }} \
               flutter build linux -v
           fi
 
       - name: Package bundle (${{ matrix.arch }})
         run: |
           mkdir -p dist
-          tar -C example/build/linux/${{ matrix.arch }}/release/bundle -czf dist/openautoflutter_example-linux-${{ matrix.arch }}.tar.gz .
+          tar -C example/build/linux/${{ matrix.flutter_arch }}/release/bundle -czf dist/openautoflutter_example-linux-${{ matrix.arch }}.tar.gz .
 
       - name: Upload release asset (${{ matrix.arch }})
         uses: softprops/action-gh-release@v2
