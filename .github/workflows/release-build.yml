@@ -1,0 +1,63 @@
+name: Release Builds
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build builder image (${{ matrix.arch }})
+        run: |
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            docker buildx build --platform linux/arm64 -t openautoflutter-builder-arm64 --load .
+          else
+            docker build -t openautoflutter-builder .
+          fi
+
+      - name: Build example app (${{ matrix.arch }})
+        run: |
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            docker run --rm -t --platform linux/arm64 \
+              -v "$PWD:/workspace" \
+              -w /workspace/example \
+              openautoflutter-builder-arm64 \
+              flutter build linux -v
+          else
+            docker run --rm -t \
+              -v "$PWD:/workspace" \
+              -w /workspace/example \
+              openautoflutter-builder \
+              flutter build linux -v
+          fi
+
+      - name: Package bundle (${{ matrix.arch }})
+        run: |
+          mkdir -p dist
+          tar -C example/build/linux/${{ matrix.arch }}/release/bundle -czf dist/openautoflutter_example-linux-${{ matrix.arch }}.tar.gz .
+
+      - name: Upload release asset (${{ matrix.arch }})
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/openautoflutter_example-linux-${{ matrix.arch }}.tar.gz
