@@ -37,12 +37,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build builder image (${{ matrix.arch }})
-        run: |
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            docker buildx build --platform ${{ matrix.platform }} -t ${{ matrix.image }} --load .
-          else
-            docker build -t ${{ matrix.image }} .
-          fi
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          load: true
+          tags: ${{ matrix.image }}
+          cache-from: type=gha,scope=builder-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=builder-${{ matrix.arch }}
 
       - name: Build example app (${{ matrix.arch }})
         run: |
