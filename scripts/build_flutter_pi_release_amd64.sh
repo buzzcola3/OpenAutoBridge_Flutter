@@ -33,13 +33,13 @@ fi
 
 pushd "$APP_DIR" >/dev/null
 flutter pub get
-"${FLUTTERPI_CMD[@]}" build --arch=x86_64 --release
+"${FLUTTERPI_CMD[@]}" build --arch=x64 --release
 popd >/dev/null
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-BUNDLE_DIR="$APP_DIR/build/flutter-pi/x86_64-generic"
+BUNDLE_DIR="$APP_DIR/build/flutter-pi/x64-generic"
 if [[ ! -d "$BUNDLE_DIR" ]]; then
   echo "Flutter-pi bundle not found: $BUNDLE_DIR" >&2
   exit 1
