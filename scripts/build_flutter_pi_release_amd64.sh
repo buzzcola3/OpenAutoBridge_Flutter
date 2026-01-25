@@ -11,6 +11,9 @@ if [[ ! -d "$APP_DIR" ]]; then
 fi
 
 FLUTTERPI_CMD=(flutterpi_tool)
+FLUTTERPI_TOOL_GIT_URL="${FLUTTERPI_TOOL_GIT_URL:-https://github.com/ardera/flutterpi_tool.git}"
+FLUTTERPI_TOOL_GIT_REF="${FLUTTERPI_TOOL_GIT_REF:-main}"
+FLUTTERPI_TOOL_PUB_VERSION="${FLUTTERPI_TOOL_PUB_VERSION:-}"
 if ! command -v flutterpi_tool >/dev/null 2>&1; then
   PUB_CACHE_DIR="${PUB_CACHE:-$HOME/.pub-cache}"
   PUB_BIN="$PUB_CACHE_DIR/bin/flutterpi_tool"
@@ -18,7 +21,11 @@ if ! command -v flutterpi_tool >/dev/null 2>&1; then
     FLUTTERPI_CMD=("$PUB_BIN")
   elif command -v flutter >/dev/null 2>&1; then
     echo "flutterpi_tool not found. Activating..." >&2
-    flutter pub global activate flutterpi_tool
+    if [[ -n "$FLUTTERPI_TOOL_PUB_VERSION" ]]; then
+      flutter pub global activate flutterpi_tool "$FLUTTERPI_TOOL_PUB_VERSION"
+    else
+      flutter pub global activate -sgit "$FLUTTERPI_TOOL_GIT_URL" --git-ref "$FLUTTERPI_TOOL_GIT_REF"
+    fi
     if [[ -x "$PUB_BIN" ]]; then
       FLUTTERPI_CMD=("$PUB_BIN")
     else
