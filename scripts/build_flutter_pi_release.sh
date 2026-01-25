@@ -17,7 +17,13 @@ if ! command -v flutterpi_tool >/dev/null 2>&1; then
   if [[ -x "$PUB_BIN" ]]; then
     FLUTTERPI_CMD=("$PUB_BIN")
   elif command -v flutter >/dev/null 2>&1; then
-    FLUTTERPI_CMD=(flutter pub global run flutterpi_tool)
+    echo "flutterpi_tool not found. Activating..." >&2
+    flutter pub global activate flutterpi_tool
+    if [[ -x "$PUB_BIN" ]]; then
+      FLUTTERPI_CMD=("$PUB_BIN")
+    else
+      FLUTTERPI_CMD=(flutter pub global run flutterpi_tool)
+    fi
   else
     echo "flutterpi_tool not found in PATH or $PUB_CACHE_DIR/bin." >&2
     echo "Install with: flutter pub global activate flutterpi_tool" >&2
