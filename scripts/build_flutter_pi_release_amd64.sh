@@ -14,18 +14,63 @@ FLUTTERPI_CMD=(flutterpi_tool)
 FLUTTERPI_TOOL_GIT_URL="${FLUTTERPI_TOOL_GIT_URL:-https://github.com/ardera/flutterpi_tool.git}"
 FLUTTERPI_TOOL_GIT_REF="${FLUTTERPI_TOOL_GIT_REF:-main}"
 FLUTTERPI_TOOL_PUB_VERSION="${FLUTTERPI_TOOL_PUB_VERSION:-}"
+PUB_CACHE_DIR="${PUB_CACHE:-$HOME/.pub-cache}"
+
+activate_flutterpi_tool() {
+  if [[ -n "$FLUTTERPI_TOOL_PUB_VERSION" ]]; then
+    flutter pub global activate flutterpi_tool "$FLUTTERPI_TOOL_PUB_VERSION"
+    return
+  fi
+
+  if flutter pub global activate -sgit "$FLUTTERPI_TOOL_GIT_URL" --git-ref "$FLUTTERPI_TOOL_GIT_REF"; then
+    return
+  fi
+
+  echo "flutterpi_tool activation failed; trying patched local clone..." >&2
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap "rm -rf '$tmp_dir'" EXIT
+  git clone --depth 1 --branch "$FLUTTERPI_TOOL_GIT_REF" "$FLUTTERPI_TOOL_GIT_URL" "$tmp_dir/flutterpi_tool"
+
+  local device_file
+  local os_file
+  device_file="$tmp_dir/flutterpi_tool/lib/src/devices/flutterpi_ssh/device_discovery.dart"
+  os_file="$tmp_dir/flutterpi_tool/lib/src/more_os_utils.dart"
+
+  if [[ -f "$device_file" ]] && ! grep -q "forWirelessDiscovery" "$device_file"; then
+    perl -0777 -i -pe 's/Future<List<Device>> pollingGetDevices\(\{Duration\? timeout\}\)/Future<List<Device>> pollingGetDevices\(\{Duration\? timeout, bool forWirelessDiscovery = false\}\)/' "$device_file"
+  fi
+
+  if [[ -f "$os_file" ]] && ! grep -q "linux_riscv64" "$os_file"; then
+    perl -0777 -i -pe 's/HostPlatform\.linux_arm64 => FlutterpiHostPlatform\.linuxARM64,\n/HostPlatform.linux_arm64 => FlutterpiHostPlatform.linuxARM64,\n      HostPlatform.linux_riscv64 => FlutterpiHostPlatform.linuxRV64,\n/' "$os_file"
+  fi
+
+  flutter pub global activate -s path "$tmp_dir/flutterpi_tool"
+}
+
+patch_flutterpi_tool() {
+  local device_file
+  local os_file
+
+  device_file="$(find "$PUB_CACHE_DIR" -type f -path "*flutterpi_tool*/lib/src/devices/flutterpi_ssh/device_discovery.dart" 2>/dev/null | head -n 1)"
+  os_file="$(find "$PUB_CACHE_DIR" -type f -path "*flutterpi_tool*/lib/src/more_os_utils.dart" 2>/dev/null | head -n 1)"
+
+  if [[ -f "$device_file" ]] && ! grep -q "forWirelessDiscovery" "$device_file"; then
+    perl -0777 -i -pe 's/Future<List<Device>> pollingGetDevices\(\{Duration\? timeout\}\)/Future<List<Device>> pollingGetDevices\(\{Duration\? timeout, bool forWirelessDiscovery = false\}\)/' "$device_file"
+  fi
+
+  if [[ -f "$os_file" ]] && ! grep -q "linux_riscv64" "$os_file"; then
+    perl -0777 -i -pe 's/HostPlatform\.linux_arm64 => FlutterpiHostPlatform\.linuxARM64,\n/HostPlatform.linux_arm64 => FlutterpiHostPlatform.linuxARM64,\n      HostPlatform.linux_riscv64 => FlutterpiHostPlatform.linuxRV64,\n/' "$os_file"
+  fi
+}
 if ! command -v flutterpi_tool >/dev/null 2>&1; then
-  PUB_CACHE_DIR="${PUB_CACHE:-$HOME/.pub-cache}"
   PUB_BIN="$PUB_CACHE_DIR/bin/flutterpi_tool"
   if [[ -x "$PUB_BIN" ]]; then
     FLUTTERPI_CMD=("$PUB_BIN")
   elif command -v flutter >/dev/null 2>&1; then
     echo "flutterpi_tool not found. Activating..." >&2
-    if [[ -n "$FLUTTERPI_TOOL_PUB_VERSION" ]]; then
-      flutter pub global activate flutterpi_tool "$FLUTTERPI_TOOL_PUB_VERSION"
-    else
-      flutter pub global activate -sgit "$FLUTTERPI_TOOL_GIT_URL" --git-ref "$FLUTTERPI_TOOL_GIT_REF"
-    fi
+    activate_flutterpi_tool
     if [[ -x "$PUB_BIN" ]]; then
       FLUTTERPI_CMD=("$PUB_BIN")
     else
@@ -37,6 +82,8 @@ if ! command -v flutterpi_tool >/dev/null 2>&1; then
     exit 1
   fi
 fi
+
+patch_flutterpi_tool
 
 pushd "$APP_DIR" >/dev/null
 flutter pub get

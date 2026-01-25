@@ -5,7 +5,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG LLVM_VERSION=18
 ARG FLUTTER_VERSION=3.38.6
 ARG FLUTTER_CHANNEL=stable
-ARG FLUTTER_ARM64_SDK_URL=https://github.com/zhzhzhy/Flutter-SDK-ARM64/releases/download/Flutter-SDK-2026-01-21/Flutter-SDK-ARM64.zip
+ARG FLUTTER_ARM64_SDK_URL=
 ARG TARGETARCH
 ENV FLUTTER_HOME=/opt/flutter
 ENV PATH="${FLUTTER_HOME}/bin:${PATH}"
@@ -67,9 +67,13 @@ RUN curl -fsSL https://capnproto.org/capnproto-c++-1.1.0.tar.gz -o /tmp/capnp.ta
 # Flutter SDK
 RUN mkdir -p /opt \
   && if [ "${TARGETARCH}" = "arm64" ]; then \
-       curl -fsSL "${FLUTTER_ARM64_SDK_URL}" -o /tmp/flutter-arm64.zip \
-       && unzip -q /tmp/flutter-arm64.zip -d /opt \
-       && rm /tmp/flutter-arm64.zip; \
+       if [ -n "${FLUTTER_ARM64_SDK_URL}" ]; then \
+         curl -fsSL "${FLUTTER_ARM64_SDK_URL}" -o /tmp/flutter-arm64.zip \
+         && unzip -q /tmp/flutter-arm64.zip -d /opt \
+         && rm /tmp/flutter-arm64.zip; \
+       else \
+         git clone --depth 1 --branch "${FLUTTER_VERSION}" https://github.com/flutter/flutter.git /opt/flutter; \
+       fi; \
      else \
        curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/${FLUTTER_CHANNEL}/linux/flutter_linux_${FLUTTER_VERSION}-${FLUTTER_CHANNEL}.tar.xz \
          | tar -xJ -C /opt; \
