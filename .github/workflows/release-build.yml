@@ -72,23 +72,44 @@ jobs:
         with:
           files: dist/openautoflutter_example-linux-${{ matrix.arch }}.tar.gz
 
-      - name: Build flutter-pi bundle (aarch64)
+      - name: Build flutter-pi bundle (arm64)
+        if: matrix.arch == 'arm64'
+        run: |
+          docker run --rm -t --platform ${{ matrix.platform }} \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            ${{ matrix.image }} \
+            bash scripts/build_flutter_pi_release_arm64.sh /workspace/example
+
+      - name: Package flutter-pi bundle (arm64)
+        if: matrix.arch == 'arm64'
+        run: |
+          mkdir -p dist
+          tar -C dist/flutter-pi-arm64 -czf dist/openautoflutter_example-flutter-pi-arm64.tar.gz .
+
+      - name: Upload flutter-pi release asset (arm64)
+        if: matrix.arch == 'arm64'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/openautoflutter_example-flutter-pi-arm64.tar.gz
+
+      - name: Build flutter-pi bundle (amd64)
         if: matrix.arch == 'amd64'
         run: |
           docker run --rm -t \
             -v "$PWD:/workspace" \
             -w /workspace \
-            openautoflutter-builder \
-            bash scripts/build_flutter_pi_release.sh /workspace/example
+            ${{ matrix.image }} \
+            bash scripts/build_flutter_pi_release_amd64.sh /workspace/example
 
-      - name: Package flutter-pi bundle (aarch64)
+      - name: Package flutter-pi bundle (amd64)
         if: matrix.arch == 'amd64'
         run: |
           mkdir -p dist
-          tar -C dist/flutter-pi -czf dist/openautoflutter_example-flutter-pi-aarch64.tar.gz .
+          tar -C dist/flutter-pi-amd64 -czf dist/openautoflutter_example-flutter-pi-amd64.tar.gz .
 
-      - name: Upload flutter-pi release asset (aarch64)
+      - name: Upload flutter-pi release asset (amd64)
         if: matrix.arch == 'amd64'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/openautoflutter_example-flutter-pi-aarch64.tar.gz
+          files: dist/openautoflutter_example-flutter-pi-amd64.tar.gz
