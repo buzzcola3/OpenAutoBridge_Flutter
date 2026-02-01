@@ -41,6 +41,7 @@ resolve_flutterpi_tool() {
 
   pushd "$tool_dir" >/dev/null
   flutter pub get
+  mkdir -p build
   dart compile exe bin/flutterpi_tool.dart -o build/flutterpi_tool
   popd >/dev/null
 
