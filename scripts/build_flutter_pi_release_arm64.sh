@@ -10,80 +10,50 @@ if [[ ! -d "$APP_DIR" ]]; then
   exit 1
 fi
 
-FLUTTERPI_CMD=(flutterpi_tool)
-FLUTTERPI_TOOL_GIT_URL="${FLUTTERPI_TOOL_GIT_URL:-https://github.com/ardera/flutterpi_tool.git}"
+FLUTTERPI_CMD=()
+FLUTTERPI_TOOL_GIT_URL="${FLUTTERPI_TOOL_GIT_URL:-https://github.com/buzzcola3/FlutterPi-plugin-bridge-tool}"
 FLUTTERPI_TOOL_GIT_REF="${FLUTTERPI_TOOL_GIT_REF:-main}"
-FLUTTERPI_TOOL_PUB_VERSION="${FLUTTERPI_TOOL_PUB_VERSION:-}"
-PUB_CACHE_DIR="${PUB_CACHE:-$HOME/.pub-cache}"
+FLUTTERPI_TOOL_PATH="${FLUTTERPI_TOOL_PATH:-}"
 
-activate_flutterpi_tool() {
-  if [[ -n "$FLUTTERPI_TOOL_PUB_VERSION" ]]; then
-    flutter pub global activate flutterpi_tool "$FLUTTERPI_TOOL_PUB_VERSION"
+resolve_flutterpi_tool() {
+  if [[ -n "$FLUTTERPI_TOOL_PATH" && -x "$FLUTTERPI_TOOL_PATH" ]]; then
+    FLUTTERPI_CMD=("$FLUTTERPI_TOOL_PATH")
     return
   fi
 
-  if flutter pub global activate -sgit "$FLUTTERPI_TOOL_GIT_URL" --git-ref "$FLUTTERPI_TOOL_GIT_REF"; then
-    return
-  fi
+  local candidate_dirs=(
+    "$ROOT_DIR/FlutterPi-plugin-bridge-tool"
+    "$ROOT_DIR/../FlutterPi-plugin-bridge-tool"
+  )
 
-  echo "flutterpi_tool activation failed; trying patched local clone..." >&2
-
-  local tmp_dir
-  tmp_dir="$(mktemp -d)"
-  trap "rm -rf '$tmp_dir'" EXIT
-  git clone --depth 1 --branch "$FLUTTERPI_TOOL_GIT_REF" "$FLUTTERPI_TOOL_GIT_URL" "$tmp_dir/flutterpi_tool"
-
-  local device_file
-  local os_file
-  device_file="$tmp_dir/flutterpi_tool/lib/src/devices/flutterpi_ssh/device_discovery.dart"
-  os_file="$tmp_dir/flutterpi_tool/lib/src/more_os_utils.dart"
-
-  if [[ -f "$device_file" ]] && ! grep -q "forWirelessDiscovery" "$device_file"; then
-    perl -0777 -i -pe 's/Future<List<Device>> pollingGetDevices\(\{Duration\? timeout\}\)/Future<List<Device>> pollingGetDevices\(\{Duration\? timeout, bool forWirelessDiscovery = false\}\)/' "$device_file"
-  fi
-
-  if [[ -f "$os_file" ]] && ! grep -q "linux_riscv64" "$os_file"; then
-    perl -0777 -i -pe 's/HostPlatform\.linux_arm64 => FlutterpiHostPlatform\.linuxARM64,\n/HostPlatform.linux_arm64 => FlutterpiHostPlatform.linuxARM64,\n      HostPlatform.linux_riscv64 => FlutterpiHostPlatform.linuxRV64,\n/' "$os_file"
-  fi
-
-  flutter pub global activate -s path "$tmp_dir/flutterpi_tool"
-}
-
-patch_flutterpi_tool() {
-  local device_file
-  local os_file
-
-  device_file="$(find "$PUB_CACHE_DIR" -type f -path "*flutterpi_tool*/lib/src/devices/flutterpi_ssh/device_discovery.dart" 2>/dev/null | head -n 1)"
-  os_file="$(find "$PUB_CACHE_DIR" -type f -path "*flutterpi_tool*/lib/src/more_os_utils.dart" 2>/dev/null | head -n 1)"
-
-  if [[ -f "$device_file" ]] && ! grep -q "forWirelessDiscovery" "$device_file"; then
-    perl -0777 -i -pe 's/Future<List<Device>> pollingGetDevices\(\{Duration\? timeout\}\)/Future<List<Device>> pollingGetDevices\(\{Duration\? timeout, bool forWirelessDiscovery = false\}\)/' "$device_file"
-  fi
-
-  if [[ -f "$os_file" ]] && ! grep -q "linux_riscv64" "$os_file"; then
-    perl -0777 -i -pe 's/HostPlatform\.linux_arm64 => FlutterpiHostPlatform\.linuxARM64,\n/HostPlatform.linux_arm64 => FlutterpiHostPlatform.linuxARM64,\n      HostPlatform.linux_riscv64 => FlutterpiHostPlatform.linuxRV64,\n/' "$os_file"
-  fi
-}
-if ! command -v flutterpi_tool >/dev/null 2>&1; then
-  PUB_BIN="$PUB_CACHE_DIR/bin/flutterpi_tool"
-  if [[ -x "$PUB_BIN" ]]; then
-    FLUTTERPI_CMD=("$PUB_BIN")
-  elif command -v flutter >/dev/null 2>&1; then
-    echo "flutterpi_tool not found. Activating..." >&2
-    activate_flutterpi_tool
-    if [[ -x "$PUB_BIN" ]]; then
-      FLUTTERPI_CMD=("$PUB_BIN")
-    else
-      FLUTTERPI_CMD=(flutter pub global run flutterpi_tool)
+  for dir in "${candidate_dirs[@]}"; do
+    if [[ -x "$dir/build/flutterpi_tool" ]]; then
+      FLUTTERPI_CMD=("$dir/build/flutterpi_tool")
+      return
     fi
-  else
-    echo "flutterpi_tool not found in PATH or $PUB_CACHE_DIR/bin." >&2
-    echo "Install with: flutter pub global activate flutterpi_tool" >&2
-    exit 1
-  fi
-fi
+  done
 
-patch_flutterpi_tool
+  local tool_dir="$ROOT_DIR/.cache/flutterpi-tool"
+  if [[ ! -d "$tool_dir/.git" ]]; then
+    rm -rf "$tool_dir"
+    git clone --depth 1 --branch "$FLUTTERPI_TOOL_GIT_REF" "$FLUTTERPI_TOOL_GIT_URL" "$tool_dir"
+  fi
+
+  pushd "$tool_dir" >/dev/null
+  flutter pub get
+  dart compile exe bin/flutterpi_tool.dart -o build/flutterpi_tool
+  popd >/dev/null
+
+  if [[ -x "$tool_dir/build/flutterpi_tool" ]]; then
+    FLUTTERPI_CMD=("$tool_dir/build/flutterpi_tool")
+    return
+  fi
+
+  echo "Failed to build FlutterPi-plugin-bridge-tool." >&2
+  exit 1
+}
+
+resolve_flutterpi_tool
 
 pushd "$APP_DIR" >/dev/null
 flutter pub get
