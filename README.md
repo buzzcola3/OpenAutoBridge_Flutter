@@ -40,7 +40,7 @@ Triggered by pushing a version tag (e.g. `git tag v0.0.18 && git push origin v0.
 
 1. Pulls the pre-built builder image from GHCR (fast, no Docker build)
 2. Builds the example app for Linux desktop (`flutter build linux`)
-3. Builds the flutter-pi bundle using the release scripts
+3. Builds the flutter-drm bundle using the release scripts
 4. Packages and uploads both artifacts to the GitHub Release
 
 Both `amd64` and `arm64` builds run in parallel on native runners.

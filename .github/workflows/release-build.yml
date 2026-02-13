@@ -62,20 +62,20 @@ jobs:
         with:
           files: dist/openautoflutter_example-linux-${{ matrix.arch }}.tar.gz
 
-      - name: Build flutter-pi bundle (${{ matrix.arch }})
+      - name: Build flutter-drm bundle (${{ matrix.arch }})
         run: |
           docker run --rm -t \
             -v "$PWD:/workspace" \
             -w /workspace \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.arch }} \
-            bash scripts/build_flutter_pi_release_${{ matrix.arch }}.sh /workspace/example
+            bash scripts/build_flutter_drm_release_${{ matrix.arch }}.sh /workspace/example
 
-      - name: Package flutter-pi bundle (${{ matrix.arch }})
+      - name: Package flutter-drm bundle (${{ matrix.arch }})
         run: |
           mkdir -p dist
-          tar -C dist/flutter-pi-${{ matrix.arch }} -czf dist/openautoflutter_example-flutter-pi-${{ matrix.arch }}.tar.gz .
+          tar -C dist/flutter-drm-${{ matrix.arch }} -czf dist/openautoflutter_example-flutter-drm-${{ matrix.arch }}.tar.gz .
 
-      - name: Upload flutter-pi release asset (${{ matrix.arch }})
+      - name: Upload flutter-drm release asset (${{ matrix.arch }})
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/openautoflutter_example-flutter-pi-${{ matrix.arch }}.tar.gz
+          files: dist/openautoflutter_example-flutter-drm-${{ matrix.arch }}.tar.gz
