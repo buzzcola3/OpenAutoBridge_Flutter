@@ -76,3 +76,27 @@ fi
 cp -a "$BUNDLE_DIR/." "$OUT_DIR/"
 
 echo "Flutter-drm amd64 release bundle created at: $OUT_DIR"
+
+# --- Debug-symbols build ---
+DEBUG_OUT_DIR="$ROOT_DIR/dist/flutter-drm-amd64-debug"
+
+echo "Building Flutter DRM debug-symbols bundle..."
+pushd "$APP_DIR" >/dev/null
+"${BUNDLER_CMD[@]}" build --arch=x64 --debug-symbols
+popd >/dev/null
+
+rm -rf "$DEBUG_OUT_DIR"
+mkdir -p "$DEBUG_OUT_DIR"
+
+DEBUG_BUNDLE_DIR="$APP_DIR/build/flutter-drm/x64-generic"
+if [[ ! -d "$DEBUG_BUNDLE_DIR" ]]; then
+  DEBUG_BUNDLE_DIR="$APP_DIR/build/flutter-pi/x64-generic"
+fi
+if [[ ! -d "$DEBUG_BUNDLE_DIR" ]]; then
+  echo "Flutter-drm debug-symbols bundle not found: $DEBUG_BUNDLE_DIR" >&2
+  exit 1
+fi
+
+cp -a "$DEBUG_BUNDLE_DIR/." "$DEBUG_OUT_DIR/"
+
+echo "Flutter-drm amd64 debug-symbols bundle created at: $DEBUG_OUT_DIR"

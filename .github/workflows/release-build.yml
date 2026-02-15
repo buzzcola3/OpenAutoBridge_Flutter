@@ -79,3 +79,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/openautoflutter_example-flutter-drm-${{ matrix.arch }}.tar.gz
+
+      - name: Package flutter-drm debug-symbols bundle (${{ matrix.arch }})
+        run: |
+          mkdir -p dist
+          tar -C dist/flutter-drm-${{ matrix.arch }}-debug -czf dist/openautoflutter_example-flutter-drm-${{ matrix.arch }}-debug.tar.gz .
+
+      - name: Upload flutter-drm debug-symbols asset (${{ matrix.arch }})
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/openautoflutter_example-flutter-drm-${{ matrix.arch }}-debug.tar.gz
