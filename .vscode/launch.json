@@ -27,6 +27,35 @@
       "externalConsole": false
     },
     {
+      "name": "Debug on Pi (DebugLantern)",
+      "type": "gdb",
+      "request": "attach",
+      "executable": "${workspaceFolder}/dist/flutter-drm-arm64-debug/flutter-drm-embedder",
+      "remote": true,
+      "target": "| ${workspaceFolder}/scripts/dl-connect.sh",
+      "cwd": "${workspaceFolder}",
+      "gdbpath": "/usr/bin/gdb-multiarch",
+      "autorun": [
+        "set sysroot /"
+      ],
+      "printCalls": false
+    },
+    {
+      "name": "Deploy & Debug on Pi (DebugLantern)",
+      "type": "gdb",
+      "request": "attach",
+      "executable": "${workspaceFolder}/dist/flutter-drm-arm64-debug/flutter-drm-embedder",
+      "remote": true,
+      "target": "| ${workspaceFolder}/scripts/dl-connect.sh",
+      "cwd": "${workspaceFolder}",
+      "gdbpath": "/usr/bin/gdb-multiarch",
+      "preLaunchTask": "debuglantern: deploy & debug",
+      "autorun": [
+        "set sysroot /"
+      ],
+      "printCalls": false
+    },
+    {
       "name": "Clean example bundle (docker)",
       "type": "cppdbg",
       "request": "launch",

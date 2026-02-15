@@ -1,5 +1,13 @@
 {
   "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "dlTarget",
+      "type": "promptString",
+      "description": "DebugLantern target (hostname or IP)",
+      "default": "192.168.1.28"
+    }
+  ],
   "tasks": [
     {
       "label": "docker: build builder image",
@@ -30,6 +38,44 @@
         "kind": "test",
         "isDefault": false
       },
+      "problemMatcher": []
+    },
+    {
+      "label": "debuglantern: build debug bundle (arm64)",
+      "type": "shell",
+      "command": "bash scripts/build_flutter_drm_release_arm64.sh example",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "debuglantern: build debug bundle (amd64)",
+      "type": "shell",
+      "command": "bash scripts/build_flutter_drm_release_amd64.sh example",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "debuglantern: deploy & debug",
+      "type": "shell",
+      "command": "bash scripts/debuglantern_deploy.sh --arch arm64 --target ${input:dlTarget}",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": "debuglantern: build debug bundle (arm64)",
+      "problemMatcher": []
+    },
+    {
+      "label": "debuglantern: deploy (no debug)",
+      "type": "shell",
+      "command": "bash scripts/debuglantern_deploy.sh --arch arm64 --target ${input:dlTarget} --no-debug",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": "debuglantern: build debug bundle (arm64)",
       "problemMatcher": []
     }
   ]
