@@ -36,7 +36,7 @@
       "cwd": "${workspaceFolder}",
       "gdbpath": "/usr/bin/gdb-multiarch",
       "autorun": [
-        "set sysroot /"
+        "source .gdbinit-remote"
       ],
       "printCalls": false
     },
@@ -51,7 +51,7 @@
       "gdbpath": "/usr/bin/gdb-multiarch",
       "preLaunchTask": "debuglantern: deploy & debug",
       "autorun": [
-        "set sysroot /"
+        "source .gdbinit-remote"
       ],
       "printCalls": false
     },

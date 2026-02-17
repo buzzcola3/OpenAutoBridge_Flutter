@@ -56,6 +56,11 @@ resolve_bundler() {
 
 resolve_bundler
 
+# Clean previous flutter-drm bundle output to force rebuild.
+# The bundler's incremental build system doesn't track the gtk-shim
+# (libflutter_linux_gtk.so) as an input/output, so stale copies persist.
+rm -rf "$APP_DIR/build/flutter-drm"
+
 pushd "$APP_DIR" >/dev/null
 flutter pub get
 "${BUNDLER_CMD[@]}" build --arch=arm64 --release

@@ -1,0 +1,18 @@
+# GDB init for remote debugging on Pi via DebugLantern
+# Sourced by launch.json autorun: "source .gdbinit-remote"
+# (cwd is set to the workspace root by launch.json)
+
+set confirm off
+set debuginfod enabled off
+set auto-load safe-path /
+
+# Use a local copy of the Pi's rootfs libraries (extracted from the buildroot
+# rootfs.ext4 release) so GDB doesn't fetch them over the network.
+set sysroot ./.cache/sysroot
+
+# Additionally search the debug bundle dir for our own .so files
+set solib-search-path ./dist/flutter-drm-arm64-debug:./dist/flutter-drm-arm64-debug/plugins
+
+# Flutter engine debug symbols (~212MB) — uncomment only if you need to debug
+# inside the Flutter engine itself. Loading takes a long time.
+# add-symbol-file ./dist/flutter-drm-arm64-debug/libflutter_engine.dbgsyms

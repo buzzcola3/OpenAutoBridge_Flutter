@@ -12,7 +12,16 @@
     {
       "label": "docker: build builder image",
       "type": "shell",
-      "command": "docker build -t openautoflutter-builder .",
+      "command": "sg docker -c 'docker build -t openautoflutter-builder .'",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: build builder image (arm64)",
+      "type": "shell",
+      "command": "sg docker -c 'docker buildx build --platform linux/arm64 -t openautoflutter-builder-arm64 --load .'",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -21,7 +30,7 @@
     {
       "label": "docker: flutter build linux (example)",
       "type": "shell",
-      "command": "docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder flutter build linux -v",
+      "command": "sg docker -c 'docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder flutter build linux -v'",
       "dependsOn": "docker: build builder image",
       "group": {
         "kind": "build",
@@ -32,7 +41,7 @@
     {
       "label": "docker: flutter clean (example)",
       "type": "shell",
-      "command": "docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder flutter clean",
+      "command": "sg docker -c 'docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder flutter clean'",
       "dependsOn": "docker: build builder image",
       "group": {
         "kind": "test",
@@ -41,9 +50,20 @@
       "problemMatcher": []
     },
     {
+      "label": "docker: flutter build linux arm64 (example)",
+      "type": "shell",
+      "command": "sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder-arm64 bash -c \"flutter pub get && flutter build linux\"'",
+      "dependsOn": "docker: build builder image (arm64)",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "debuglantern: build debug bundle (arm64)",
       "type": "shell",
-      "command": "bash scripts/build_flutter_drm_release_arm64.sh example",
+      "command": "sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -w /workspace openautoflutter-builder-arm64 bash scripts/build_flutter_drm_release_arm64.sh example'",
+      "dependsOn": "docker: flutter build linux arm64 (example)",
       "options": {
         "cwd": "${workspaceFolder}"
       },
