@@ -6,8 +6,6 @@
 
 G_BEGIN_DECLS
 
-#define TEXTURE_TYPE_RGBA (texture_rgba_get_type())
-
 #define OA_VIDEO_TEXTURE_TYPE (oa_video_texture_get_type())
 G_DECLARE_FINAL_TYPE(OAVideoTexture, oa_video_texture, OA, VIDEO_TEXTURE, FlTextureGL)
 
