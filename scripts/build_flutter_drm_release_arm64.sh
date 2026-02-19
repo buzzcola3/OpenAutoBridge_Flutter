@@ -105,3 +105,21 @@ fi
 cp -a "$DEBUG_BUNDLE_DIR/." "$DEBUG_OUT_DIR/"
 
 echo "Flutter-drm arm64 debug-symbols bundle created at: $DEBUG_OUT_DIR"
+
+# --- Fix plugin symlinks for host debugging ---
+# Docker builds run flutter pub get inside the container where the workspace
+# is mounted at /workspace, leaving absolute symlinks that point to /workspace/
+# instead of the real host path. Repoint them so the debugger can resolve source.
+SYMLINK_DIR="$APP_DIR/linux/flutter/ephemeral/.plugin_symlinks"
+if [[ -d "$SYMLINK_DIR" ]]; then
+  for link in "$SYMLINK_DIR"/*; do
+    if [[ -L "$link" ]]; then
+      target="$(readlink "$link")"
+      if [[ "$target" == /workspace* ]]; then
+        host_target="$ROOT_DIR${target#/workspace}"
+        echo "Fixing symlink: $(basename "$link") -> $host_target"
+        ln -snf "$host_target" "$link"
+      fi
+    fi
+  done
+fi

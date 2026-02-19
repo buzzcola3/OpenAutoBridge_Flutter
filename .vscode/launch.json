@@ -34,7 +34,7 @@
       "remote": true,
       "target": "| ${workspaceFolder}/scripts/dl-connect.sh",
       "cwd": "${workspaceFolder}",
-      "gdbpath": "/usr/bin/gdb-multiarch",
+      "gdbpath": "${workspaceFolder}/scripts/gdb-remote.sh",
       "autorun": [
         "source .gdbinit-remote"
       ],
@@ -48,8 +48,23 @@
       "remote": true,
       "target": "| ${workspaceFolder}/scripts/dl-connect.sh",
       "cwd": "${workspaceFolder}",
-      "gdbpath": "/usr/bin/gdb-multiarch",
+      "gdbpath": "${workspaceFolder}/scripts/gdb-remote.sh",
       "preLaunchTask": "debuglantern: deploy & debug",
+      "autorun": [
+        "source .gdbinit-remote"
+      ],
+      "printCalls": false
+    },
+    {
+      "name": "Upload & Debug on Pi (DebugLantern)",
+      "type": "gdb",
+      "request": "attach",
+      "executable": "${workspaceFolder}/dist/flutter-drm-arm64-debug/flutter-drm-embedder",
+      "remote": true,
+      "target": "| ${workspaceFolder}/scripts/dl-connect.sh",
+      "cwd": "${workspaceFolder}",
+      "gdbpath": "${workspaceFolder}/scripts/gdb-remote.sh",
+      "preLaunchTask": "debuglantern: upload existing bundle",
       "autorun": [
         "source .gdbinit-remote"
       ],
