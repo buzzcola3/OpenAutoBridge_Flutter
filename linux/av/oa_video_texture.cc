@@ -1,7 +1,8 @@
 // OAVideoTexture — Flutter GL texture fed from a DropBuffer.
 //
 // Handles three frame formats:
-//   1. NV12 DMA-BUF  → EGL import per-plane (R8 + GR88) → NV12→RGB shader
+//   1. NV12 DMA-BUF  → multi-plane NV12 EGL import (GL_TEXTURE_EXTERNAL_OES)
+//                       with per-plane R8+GR88 fallback → NV12→RGB shader
 //   2. NV12 CPU      → glTexImage2D Y (R8) + UV (RG8)   → NV12→RGB shader
 //   3. RGBA CPU      → glTexImage2D / glTexSubImage2D
 //
@@ -48,6 +49,17 @@ static void gl_check_errors(const char* where) {
 #define DRM_FORMAT_NV12  0x3231564E
 #endif
 
+// Multi-plane EGL DMA-BUF attributes (may be missing from older headers)
+#ifndef EGL_DMA_BUF_PLANE1_FD_EXT
+#define EGL_DMA_BUF_PLANE1_FD_EXT     0x3273
+#define EGL_DMA_BUF_PLANE1_OFFSET_EXT 0x3274
+#define EGL_DMA_BUF_PLANE1_PITCH_EXT  0x3275
+#endif
+
+#ifndef GL_TEXTURE_EXTERNAL_OES
+#define GL_TEXTURE_EXTERNAL_OES 0x8D65
+#endif
+
 // ──────────────────────────────────────────────────────────────────────────────
 // NV12 → RGB shader sources
 // ──────────────────────────────────────────────────────────────────────────────
@@ -77,6 +89,17 @@ void main() {
         y + 1.772 * u,
         1.0);
 }
+)glsl";
+
+// OES external texture shader — used for multi-plane NV12 DMA-BUF import
+// where the driver does YUV→RGB conversion internally.
+static const char* kExtOESFrag = R"glsl(
+#version 100
+#extension GL_OES_EGL_image_external : require
+precision mediump float;
+varying vec2 vTex;
+uniform samplerExternalOES texExt;
+void main() { gl_FragColor = texture2D(texExt, vTex); }
 )glsl";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -153,11 +176,21 @@ struct _OAVideoTexture {
     // EGL DMA-BUF import function pointers (resolved once)
     bool   egl_probed        = false;
     bool   dmabuf_supported  = false;
+    bool   dmabuf_ext_supported = false;  // GL_OES_EGL_image_external available
     PFNEGLCREATEIMAGEKHRPROC       eglCreateImageKHR_fn   = nullptr;
     PFNEGLDESTROYIMAGEKHRPROC      eglDestroyImageKHR_fn  = nullptr;
     PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES_fn = nullptr;
     EGLImageKHR prev_y_img   = EGL_NO_IMAGE_KHR;
     EGLImageKHR prev_uv_img  = EGL_NO_IMAGE_KHR;
+    EGLImageKHR prev_ext_img = EGL_NO_IMAGE_KHR;
+
+    // OES external texture for multi-plane NV12 DMA-BUF import
+    GLuint ext_program  = 0;
+    GLuint ext_tex      = 0;
+    GLint  ext_loc_aPos = -1;
+    GLint  ext_loc_aTex = -1;
+    GLint  ext_loc_texExt = -1;
+    bool   ext_oes_inited = false;
 
     bool nv12_inited = false;
     bool logged_path = false;
@@ -254,9 +287,17 @@ static void probe_egl_dmabuf(OAVideoTexture* self) {
         self->dmabuf_supported = true;
     }
 
+    const char* gl_ext_list = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+    if (self->dmabuf_supported && gl_ext_list &&
+        strstr(gl_ext_list, "GL_OES_EGL_image_external")) {
+        self->dmabuf_ext_supported = true;
+    }
+
     const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
     std::cout << "[OAVideoTexture] GL: " << (renderer ? renderer : "unknown")
-              << " | DMA-BUF: " << (self->dmabuf_supported ? "yes" : "no") << "\n";
+              << " | DMA-BUF: " << (self->dmabuf_supported ? "yes" : "no")
+              << " | OES external: " << (self->dmabuf_ext_supported ? "yes" : "no")
+              << "\n";
     gl_check_errors("probe_egl_dmabuf");
 }
 
@@ -362,6 +403,159 @@ static bool upload_nv12_dmabuf(OAVideoTexture* self, FrameSlot* slot) {
     self->uv_tex_h = static_cast<int>(uv_h);
 
     return true;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Multi-plane NV12 DMA-BUF import → GL_TEXTURE_EXTERNAL_OES
+// ──────────────────────────────────────────────────────────────────────────────
+
+static void ensure_ext_oes_resources(OAVideoTexture* self) {
+    if (self->ext_oes_inited) return;
+
+    GLuint vs = compile_shader(GL_VERTEX_SHADER,   kNV12Vert, "ext-oes-vert");
+    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, kExtOESFrag, "ext-oes-frag");
+    if (!vs || !fs) {
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
+        self->dmabuf_ext_supported = false;
+        return;
+    }
+
+    self->ext_program = link_program(vs, fs);
+    if (!self->ext_program) {
+        self->dmabuf_ext_supported = false;
+        return;
+    }
+
+    self->ext_loc_aPos   = glGetAttribLocation(self->ext_program,  "aPos");
+    self->ext_loc_aTex   = glGetAttribLocation(self->ext_program,  "aTex");
+    self->ext_loc_texExt = glGetUniformLocation(self->ext_program, "texExt");
+
+    glGenTextures(1, &self->ext_tex);
+
+    self->ext_oes_inited = true;
+    std::cout << "[OAVideoTexture] OES external shader linked: prog="
+              << self->ext_program << " tex=" << self->ext_tex << "\n";
+    gl_check_errors("ensure_ext_oes_resources");
+}
+
+static bool upload_nv12_dmabuf_multiplane(OAVideoTexture* self, FrameSlot* slot) {
+    probe_egl_dmabuf(self);
+    if (!self->dmabuf_ext_supported) return false;
+
+    ensure_ext_oes_resources(self);
+    if (!self->ext_oes_inited) return false;
+
+    EGLDisplay dpy = eglGetCurrentDisplay();
+
+    // Destroy previous frame's multi-plane EGLImage
+    if (self->prev_ext_img != EGL_NO_IMAGE_KHR) {
+        self->eglDestroyImageKHR_fn(dpy, self->prev_ext_img);
+        self->prev_ext_img = EGL_NO_IMAGE_KHR;
+    }
+
+    const uint32_t w = static_cast<uint32_t>(slot->width);
+    const uint32_t h = static_cast<uint32_t>(slot->height);
+
+    // Multi-plane NV12 import: PLANE0 = Y, PLANE1 = UV interleaved
+    const EGLint attrs[] = {
+        EGL_WIDTH,  static_cast<EGLint>(w),
+        EGL_HEIGHT, static_cast<EGLint>(h),
+        EGL_LINUX_DRM_FOURCC_EXT, static_cast<EGLint>(DRM_FORMAT_NV12),
+        EGL_DMA_BUF_PLANE0_FD_EXT,     slot->y_dma_fd,
+        EGL_DMA_BUF_PLANE0_OFFSET_EXT, static_cast<EGLint>(slot->y_dma_offset),
+        EGL_DMA_BUF_PLANE0_PITCH_EXT,  static_cast<EGLint>(slot->y_dma_stride),
+        EGL_DMA_BUF_PLANE1_FD_EXT,     slot->uv_dma_fd,
+        EGL_DMA_BUF_PLANE1_OFFSET_EXT, static_cast<EGLint>(slot->uv_dma_offset),
+        EGL_DMA_BUF_PLANE1_PITCH_EXT,  static_cast<EGLint>(slot->uv_dma_stride),
+        EGL_NONE,
+    };
+
+    EGLImageKHR ext_img = self->eglCreateImageKHR_fn(
+        dpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, attrs);
+    if (ext_img == EGL_NO_IMAGE_KHR) {
+        static bool logged = false;
+        if (!logged) {
+            std::cout << "[OAVideoTexture] NV12 multi-plane import FAILED: "
+                      << w << "x" << h
+                      << " y_fd=" << slot->y_dma_fd
+                      << " y_stride=" << slot->y_dma_stride
+                      << " y_off=" << slot->y_dma_offset
+                      << " uv_fd=" << slot->uv_dma_fd
+                      << " uv_stride=" << slot->uv_dma_stride
+                      << " uv_off=" << slot->uv_dma_offset
+                      << " eglError=0x" << std::hex << eglGetError() << std::dec << "\n";
+            logged = true;
+        }
+        return false;
+    }
+
+    // Bind to GL_TEXTURE_EXTERNAL_OES
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, self->ext_tex);
+    self->glEGLImageTargetTexture2DOES_fn(GL_TEXTURE_EXTERNAL_OES, ext_img);
+    gl_check_errors("dmabuf multiplane glEGLImageTargetTexture2DOES");
+    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    self->prev_ext_img = ext_img;
+    return true;
+}
+
+/// Render from GL_TEXTURE_EXTERNAL_OES → FBO → gl_tex (RGBA GL_TEXTURE_2D)
+static void render_ext_oes_to_rgba(OAVideoTexture* self, int w, int h) {
+    // Ensure output RGBA texture
+    if (!self->gl_tex) glGenTextures(1, &self->gl_tex);
+    glBindTexture(GL_TEXTURE_2D, self->gl_tex);
+    if (self->tex_w != w || self->tex_h != h) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        self->tex_w = w;
+        self->tex_h = h;
+    }
+
+    // Ensure NV12 FBO exists (shared with NV12 CPU path)
+    ensure_nv12_resources(self);
+
+    GLint prev_fbo = 0, prev_viewport[4] = {};
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+    glGetIntegerv(GL_VIEWPORT, prev_viewport);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, self->nv12_fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, self->gl_tex, 0);
+
+    GLenum fbo_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (fbo_status != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "[OAVideoTexture] FBO INCOMPLETE (OES): 0x"
+                  << std::hex << fbo_status << std::dec << "\n";
+    }
+    glViewport(0, 0, w, h);
+
+    // Draw with OES external shader (driver does YUV→RGB)
+    glUseProgram(self->ext_program);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, self->ext_tex);
+    glUniform1i(self->ext_loc_texExt, 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, self->nv12_vbo);
+    glEnableVertexAttribArray(self->ext_loc_aPos);
+    glVertexAttribPointer(self->ext_loc_aPos, 2, GL_FLOAT, GL_FALSE,
+                          4 * sizeof(GLfloat), (void*)0);
+    glEnableVertexAttribArray(self->ext_loc_aTex);
+    glVertexAttribPointer(self->ext_loc_aTex, 2, GL_FLOAT, GL_FALSE,
+                          4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    gl_check_errors("render_ext_oes_to_rgba draw");
+
+    glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+    glViewport(prev_viewport[0], prev_viewport[1],
+               prev_viewport[2], prev_viewport[3]);
 }
 
 static void upload_nv12_cpu(OAVideoTexture* self, FrameSlot* slot) {
@@ -543,14 +737,26 @@ static gboolean oa_video_texture_populate(FlTextureGL* texture,
     switch (slot->format) {
 
     case FrameFormat::kNV12_DMABUF: {
+        // Try multi-plane NV12 import first (driver handles YUV→RGB)
+        bool ok = upload_nv12_dmabuf_multiplane(self, slot);
+        if (ok) {
+            render_ext_oes_to_rgba(self, w, h);
+            if (!self->logged_path) {
+                std::cout << "[OAVideoTexture] rendering NV12 DMA-BUF multi-plane (zero-copy, OES)\n";
+                self->logged_path = true;
+            }
+            break;
+        }
+
+        // Fall back to per-plane R8/GR88 import
         ensure_nv12_resources(self);
         if (!self->nv12_inited) { emit_fallback("NV12 shader init failed (dmabuf)"); return TRUE; }
 
-        bool ok = upload_nv12_dmabuf(self, slot);
+        ok = upload_nv12_dmabuf(self, slot);
         if (ok) {
             render_nv12_to_rgba(self, w, h);
             if (!self->logged_path) {
-                std::cout << "[OAVideoTexture] rendering NV12 DMA-BUF (zero-copy)\n";
+                std::cout << "[OAVideoTexture] rendering NV12 DMA-BUF per-plane (zero-copy)\n";
                 self->logged_path = true;
             }
         } else {
@@ -644,17 +850,24 @@ static void oa_video_texture_dispose(GObject* obj) {
             self->eglDestroyImageKHR_fn(dpy, self->prev_uv_img);
             self->prev_uv_img = EGL_NO_IMAGE_KHR;
         }
+        if (self->prev_ext_img != EGL_NO_IMAGE_KHR) {
+            self->eglDestroyImageKHR_fn(dpy, self->prev_ext_img);
+            self->prev_ext_img = EGL_NO_IMAGE_KHR;
+        }
     }
 
     if (self->nv12_fbo)     { glDeleteFramebuffers(1, &self->nv12_fbo); self->nv12_fbo = 0; }
     if (self->nv12_vbo)     { glDeleteBuffers(1, &self->nv12_vbo); self->nv12_vbo = 0; }
     if (self->nv12_program) { glDeleteProgram(self->nv12_program); self->nv12_program = 0; }
+    if (self->ext_program)  { glDeleteProgram(self->ext_program); self->ext_program = 0; }
     if (self->y_tex)        { glDeleteTextures(1, &self->y_tex); self->y_tex = 0; }
     if (self->uv_tex)       { glDeleteTextures(1, &self->uv_tex); self->uv_tex = 0; }
+    if (self->ext_tex)      { glDeleteTextures(1, &self->ext_tex); self->ext_tex = 0; }
     if (self->gl_tex)       { glDeleteTextures(1, &self->gl_tex); self->gl_tex = 0; }
 
     self->tex_w = self->tex_h = 0;
     self->nv12_inited = false;
+    self->ext_oes_inited = false;
 
     G_OBJECT_CLASS(oa_video_texture_parent_class)->dispose(obj);
 }
