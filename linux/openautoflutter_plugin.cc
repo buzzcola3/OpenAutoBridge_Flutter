@@ -38,6 +38,7 @@ struct _OpenautoflutterPlugin {
   std::unique_ptr<OatMessageHandlers> handlers;
   FlTextureRegistrar* texture_registrar; // to mark frames available
   bool handlers_installed;
+  std::unique_ptr<DropBuffer> drop_buffer; // shared state between decoder & texture
 };
 
 G_DEFINE_TYPE(OpenautoflutterPlugin, openautoflutter_plugin, g_object_get_type())
@@ -101,6 +102,7 @@ static void openautoflutter_plugin_dispose(GObject* object) {
   if (self->video_texture != nullptr) {
     g_clear_object(&self->video_texture);
   }
+  self->drop_buffer.reset();
   G_OBJECT_CLASS(openautoflutter_plugin_parent_class)->dispose(object);
 }
 
@@ -114,6 +116,7 @@ static void openautoflutter_plugin_init(OpenautoflutterPlugin* self) {
   self->transport = std::make_unique<NativeTransport>();
   self->texture_registrar = nullptr;
   self->handlers_installed = false;
+  self->drop_buffer = std::make_unique<DropBuffer>();
 
   // Start as Side B (joiner) with explicit 5s wait and 1000us poll.
   g_message("OAT: starting transport as Side B (wait=5000ms poll=1000us)");
@@ -148,12 +151,12 @@ void openautoflutter_plugin_register_with_registrar(FlPluginRegistrar* registrar
   // Register the GL texture so Flutter can render it via a Texture widget.
   FlTextureRegistrar* texture_registrar =
       fl_plugin_registrar_get_texture_registrar(registrar);
-  plugin->video_texture = oa_video_texture_new(1, 1);
+  plugin->video_texture = oa_video_texture_new(plugin->drop_buffer.get());
   plugin->texture_id = oa_video_texture_register(plugin->video_texture, texture_registrar);
   plugin->texture_registrar = texture_registrar;
 
   if (plugin->transport && !plugin->handlers_installed) {
-    plugin->handlers = std::make_unique<OatMessageHandlers>(*plugin->transport, plugin->video_texture, plugin->texture_registrar);
+    plugin->handlers = std::make_unique<OatMessageHandlers>(*plugin->transport, plugin->video_texture, plugin->texture_registrar, plugin->drop_buffer.get());
     plugin->handlers->install();
     plugin->handlers_installed = true;
   }

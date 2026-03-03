@@ -23,20 +23,45 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ninja-build \
     cmake \
     libgtk-3-dev \
+  libunwind-dev \
     liblzma-dev \
     libglu1-mesa-dev \
     libxi6 libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev \
     gnupg \
   && rm -rf /var/lib/apt/lists/*
 
-# Native deps for FFmpeg codecs
+# Native deps for GStreamer H264 decoding
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libavcodec-dev \
-    libavformat-dev \
-    libavutil-dev \
-    libswscale-dev \
-    libswresample-dev \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
   && rm -rf /var/lib/apt/lists/*
+
+# Some distributions do not ship a pkg-config file for libunwind even though
+# the library is available. GStreamer's .pc file lists libunwind as a
+# dependency, which causes pkg-config checks to fail. Provide small shim
+# .pc files so CMake's pkg_check_modules can succeed.
+RUN mkdir -p /usr/lib/aarch64-linux-gnu/pkgconfig /usr/lib/x86_64-linux-gnu/pkgconfig \
+  && printf '%s\n' \
+     'prefix=/usr' \
+     'libdir=${prefix}/lib/aarch64-linux-gnu' \
+     'Name: libunwind' \
+     'Description: libunwind pkg-config shim' \
+     'Version: 1' \
+     'Libs: -lunwind' \
+     'Cflags:' \
+     > /usr/lib/aarch64-linux-gnu/pkgconfig/libunwind.pc \
+  && printf '%s\n' \
+     'prefix=/usr' \
+     'libdir=${prefix}/lib/x86_64-linux-gnu' \
+     'Name: libunwind' \
+     'Description: libunwind pkg-config shim' \
+     'Version: 1' \
+     'Libs: -lunwind' \
+     'Cflags:' \
+     > /usr/lib/x86_64-linux-gnu/pkgconfig/libunwind.pc
+
+    # Ensure pkg-config can find the shim .pc files for both architectures
+    ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/lib/pkgconfig
 
 # LLVM/Clang + libc++
 RUN echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" > /etc/apt/sources.list.d/llvm.list \

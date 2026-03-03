@@ -64,10 +64,15 @@ struct AVConsumer::Impl {
 				std::memcpy(&ts, buffer, sizeof(uint64_t));
 				std::memcpy(&payload, buffer + sizeof(uint64_t), sizeof(uint32_t));
 				const uint8_t* h264 = buffer + header;
-				const size_t h264_size = size - header;
+				// Use the payload field from the header — it contains the real
+				// H.264 byte count.  size is the entire shm region which is
+				// much larger than the compressed frame.
+				const size_t h264_size = (payload > 0 && payload <= (size - header))
+					? static_cast<size_t>(payload)
+					: (size - header);
 				int pkt_id = ++video_pkt_counter;
 				if (pkt_id <= 10) {
-					std::cout << "[AVConsumer] pkt=" << pkt_id << " ts=" << ts << " size=" << size
+					std::cout << "[AVConsumer] pkt=" << pkt_id << " ts=" << ts << " shm=" << size
 						<< " payload=" << payload << " h264=" << h264_size
 						<< " head=" << hex_head(h264, h264_size, 32) << std::endl;
 				}

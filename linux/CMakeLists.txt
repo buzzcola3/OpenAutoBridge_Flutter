@@ -24,7 +24,7 @@ list(APPEND PLUGIN_SOURCES
   "oat_message_handlers.cpp"
   "av/oa_video_texture.cc"
   "common/SharedMemoryConsumer.cpp"
-  "av/h264_decoder.cc"
+  "av/h264_decoder_gst.cc"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
@@ -127,13 +127,12 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE open_auto_transport open_auto_trans
 target_link_libraries(${PLUGIN_NAME} PRIVATE ${CMAKE_DL_LIBS})
 target_link_libraries(${PLUGIN_NAME} PRIVATE c++ c++abi)
 
-# FFmpeg (libav) for software H264 decoding
-find_library(AVCODEC_LIB avcodec)
-find_library(AVUTIL_LIB avutil)
-find_library(SWSCALE_LIB swscale)
-if (AVCODEC_LIB AND AVUTIL_LIB AND SWSCALE_LIB)
-  target_link_libraries(${PLUGIN_NAME} PRIVATE ${AVCODEC_LIB} ${AVUTIL_LIB} ${SWSCALE_LIB})
-endif()
+# GStreamer for H264 decoding (v4l2slh264dec HW or software fallback)
+pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 gstreamer-allocators-1.0)
+target_include_directories(${PLUGIN_NAME} PRIVATE ${GST_INCLUDE_DIRS})
+target_link_libraries(${PLUGIN_NAME} PRIVATE ${GST_LIBRARIES})
+
+
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
@@ -185,9 +184,9 @@ target_include_directories(${TEST_RUNNER} PRIVATE "${_oat_prefix}/include")
 target_sources(${TEST_RUNNER} PRIVATE "${_oat_wire_capnp_cpp}")
 target_link_libraries(${TEST_RUNNER} PRIVATE open_auto_transport open_auto_transport_capnp open_auto_transport_kj ${CMAKE_DL_LIBS})
 target_link_libraries(${TEST_RUNNER} PRIVATE c++ c++abi)
-if (AVCODEC_LIB AND AVUTIL_LIB AND SWSCALE_LIB)
-  target_link_libraries(${TEST_RUNNER} PRIVATE ${AVCODEC_LIB} ${AVUTIL_LIB} ${SWSCALE_LIB})
-endif()
+target_include_directories(${TEST_RUNNER} PRIVATE ${GST_INCLUDE_DIRS})
+target_link_libraries(${TEST_RUNNER} PRIVATE ${GST_LIBRARIES})
+
 
 # Enable automatic test discovery.
 include(GoogleTest)

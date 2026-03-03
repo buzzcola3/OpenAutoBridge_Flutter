@@ -1,0 +1,93 @@
+check what memory does the Mali-g31 allocate, how much and where
+
+check where in the memory we write the YUV textures
+
+how the OS blocks the system writing something into Mali-g31 addressed memory
+
+does it use the same memory address always for the YUV buffers?
+
+why does the 8th frame crash on the Y plane draw
+
+how is it timed, is it non-parallel? does flutter wait for the texture to be ready?
+
+how does the flutter upscale the 480x800 to 4k (likely not an issue, since it sometimes works. but 4k is a lot, it has to store it somewhere?)
+
+linear modes, and strides? what are they? why are they calculated, used for?
+
+REAL STEPS:
+check memory usage for the gpu on the pi when the crash happens
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Panfrost Tiled→Linear Conversion Buffer Overflow Bug
+The Bug in One Sentence
+When Panfrost converts a U_INTERLEAVED (tiled) texture to LINEAR layout during glTexSubImage2D unmap, it recalculates the layout metadata but does not reallocate the BO, and for certain dimensions the linear layout requires more bytes than the tiled layout.
+
+How It Happens (Step by Step)
+1. Texture Creation
+Your 800×480 GL_RED texture is created. Panfrost chooses DRM_FORMAT_MOD_ARM_16X16_BLOCK_U_INTERLEAVED (ARM's 16×16 block tiling). The tiled layout is calculated in pan_mod.c pan_mod_u_tiled_init_slice_layout:
+
+Parameter	Value
+Tile size	16×16 pixels = 256 bytes
+Tiles per row	ceil(800/16) = 50
+row_stride_B	50 × 256 = 12,800 bytes (aligned to 64)
+Tiles per column	ceil(480/16) = 30
+surf_stride_B	12,800 × 30 = 384,000 bytes
+data_size_B	ALIGN(384,000, 4096) = 385,024 bytes (94 pages)
+The kernel allocates a BO of 385,024 bytes (94 pages exactly).
+
+2. Repeated glTexSubImage2D Calls
+Each call goes through panfrost_ptr_map → CPU writes tiled data → panfrost_ptr_unmap. After LAYOUT_CONVERT_THRESHOLD complete overwrites, panfrost_should_linear_convert() returns true at pan_resource.c:2379.
+
+3. The Conversion (Where It Goes Wrong)
+At pan_resource.c:2381-2393:
+
+
+panfrost_resource_setup(screen, prsrc, DRM_FORMAT_MOD_LINEAR, ...);//              ↑ recalculates layout metadata to LINEAR//                but does NOT touch the BOassert(prsrc->plane.layout.data_size_B <= panfrost_bo_size(bo));//              ↑ COMPILED OUT in release builds (-DNDEBUG)util_copy_rect(bo->ptr.cpu + ..., ...,    prsrc->plane.layout.slices[0].tiled_or_linear.row_stride_B,  // 832    0, 0, 800, 480, trans->map, transfer->stride, 0, 0);//              ↑ writes 480 rows at stride 832 into the tiled-sized BO
+The new LINEAR layout:
+
+Parameter	Value
+row_stride_B	ALIGN(800×1, 64) = 832 bytes
+surf_stride_B	832 × 480 = 399,360 bytes
+data_size_B	ALIGN(399,360, 4096) = 401,408 bytes (98 pages)
+util_copy_rect writes: dst = bo->ptr.cpu + row × 832, for rows 0–479, 800 bytes each.
+
+4. The Overflow
+
+Row	dst offset	End offset	Status
+461	383,552	384,352	Within 385,024 ✓
+462	384,384	385,184	Overflows by 160 bytes
+...	...	...	Past BO boundary
+479	398,528	399,328	14,304 bytes past BO
+Why It's Intermittent
+The BO cache (panfrost_bo_cache_fetch at pan_bo.c:218) uses power-of-2 buckets (util_logbase2(size)). Both 385,024 and 401,408 fall in bucket 18 (2^18 = 262,144 to 2^19 = 524,288). So a recycled BO from a previous allocation can be larger than 385,024:
+
+BO ≥ 401,408 bytes (98+ pages): Linear write fits → works fine, no crash
+BO = 397,312 bytes (97 pages): Crashes at row 477 → matches your backtrace exactly (memcpy(__dest=0xffff9c360e40) = base + 477×832)
+BO = 385,024 bytes (94 pages, fresh alloc): Crashes at row 462
+Overflow lands in adjacent mapped memory: No SIGSEGV, but corrupts the bottom of the texture (GPU reads garbage beyond BO for the last rows) and also silently corrupts whatever allocation happens to be next in virtual memory
+Why the Assert Doesn't Catch It
+Line 2387: assert(prsrc->plane.layout.data_size_B <= panfrost_bo_size(bo));
+
+This would catch it (401,408 > 385,024), but Buildroot builds Mesa with --buildtype=release, which defines NDEBUG, making all assert() calls into no-ops.
+
+The comment above it says: "converting the resource from tiled to linear and back shouldn't increase memory usage..." — this assumption is wrong for dimensions where width × bpp is not a multiple of the tile width (16 bytes).
+
+Why Tiled < Linear for 800×480×R8
+Tiled: Packs 800 pixels evenly into 50 tiles per row (800 / 16 = 50, no waste). Stride = 50 × 256 = 12,800 bytes per tile-row.
+Linear: Each pixel row needs 800 bytes, aligned to 64 → 832 bytes. The 32-byte padding per row ×30 tile-rows × 16 pixels/tile-row = 480 rows × 32 wasted bytes = 15,360 bytes of extra padding.
+The gap: 401,408 − 385,024 = 16,384 bytes (4 pages).
+
+How to Fix It in the Driver
+In pan_resource.c around line 2381, after panfrost_resource_setup recalculates the layout, the BO must be reallocated if too small:
+
+
+if (panfrost_should_linear_convert(ctx, prsrc, transfer)) {    pan_resource_afbcp_stop(prsrc);    panfrost_resource_setup(screen, prsrc, DRM_FORMAT_MOD_LINEAR,                            prsrc->image.props.format, 0);    /* The linear layout may need more space than the tiled one     * (e.g. when row padding exceeds tile packing efficiency).     * Reallocate if the current BO is too small. */    if (prsrc->plane.layout.data_size_B > panfrost_bo_size(bo)) {        struct panfrost_bo *new_bo = panfrost_bo_create(            dev, prsrc->plane.layout.data_size_B, bo->flags,            "Linear converted BO");        if (new_bo) {            panfrost_bo_unreference(bo);            bo = new_bo;            prsrc->bo = new_bo;            prsrc->plane.base = new_bo->ptr.gpu;        }    }    assert(prsrc->plane.layout.data_size_B <= panfrost_bo_size(bo));    util_copy_rect( ... );}
+This should be reported upstream to Mesa — the bug affects any single-byte-per-pixel format (R8, A8, L8) at widths where ALIGN(width, 64) × height > tiled_size.
+
+Application-Level Workaround
+To avoid hitting this driver bug entirely in your code, you have two options:
+
+Use GL_RGBA for all textures — 4 bytes/pixel means ALIGN(width×4, 64) row stride vs tiled stride; the padding ratio is much smaller and typically tiled ≥ linear
+Do YUV→RGBA conversion on the CPU and upload only a single RGBA texture — eliminates the three R8 plane textures entirely
+Want me to implement the CPU-side YUV→RGBA workaround in oa_video_texture.cc?
+

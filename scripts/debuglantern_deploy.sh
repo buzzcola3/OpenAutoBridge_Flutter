@@ -66,45 +66,9 @@ else
   echo "==> New session ID: $SESSION_ID"
 fi
 
-# --- download device sysroot ---------------------------------------------------
-SYSROOT_DIR="$ROOT_DIR/dist/dl-sysroot"
-echo "==> Downloading device sysroot..."
-"$CTL" sysroot "$SYSROOT_DIR" --target "$TARGET" --port "$DL_PORT" || true
-
-# If the tool extracted into the directory, we're done. Otherwise try
-# to locate an archive left behind (uncompressed tar) and extract it.
-if [[ -d "$SYSROOT_DIR" && $(ls -A "$SYSROOT_DIR" 2>/dev/null | wc -l) -gt 0 ]]; then
-  echo "    Sysroot extracted to $SYSROOT_DIR"
-else
-  echo "    No extracted files found in $SYSROOT_DIR — searching for archive fallback"
-  # Find most-recent candidate archive in dist (dl-sysroot.* or any tar*)
-  CANDIDATE=$(find "$ROOT_DIR/dist" -maxdepth 1 -type f \( -iname 'dl-sysroot*' -o -iname 'dl-sysroot.*' -o -iname '*.tar' -o -iname '*.tar.*' -o -iname '*.tgz' \) -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 | cut -d' ' -f2- || true)
-  if [[ -n "$CANDIDATE" && -f "$CANDIDATE" ]]; then
-    echo "    Found archive: $CANDIDATE — extracting..."
-    rm -rf "$SYSROOT_DIR.tmp" "$SYSROOT_DIR"
-    mkdir -p "$SYSROOT_DIR.tmp"
-    # Use 'file' to detect compression, fall back to plain tar extract
-    if file "$CANDIDATE" | grep -qi 'gzip'; then
-      tar -xzf "$CANDIDATE" -C "$SYSROOT_DIR.tmp"
-    else
-      tar -xf "$CANDIDATE" -C "$SYSROOT_DIR.tmp"
-    fi
-    # Move extracted tree into place if extraction succeeded
-    if [[ $(ls -A "$SYSROOT_DIR.tmp" 2>/dev/null | wc -l) -gt 0 ]]; then
-      mv "$SYSROOT_DIR.tmp" "$SYSROOT_DIR"
-      echo "    Extracted sysroot to $SYSROOT_DIR"
-    else
-      echo "    Extraction failed or archive empty: $CANDIDATE" >&2
-      rm -rf "$SYSROOT_DIR.tmp"
-    fi
-  else
-    echo "    No sysroot archive found in $ROOT_DIR/dist — sysroot download may have failed" >&2
-  fi
-fi
-
 # --- configure env & args -----------------------------------------------------
 echo "==> Configuring session..."
-"$CTL" env "$SESSION_ID" "LD_LIBRARY_PATH=.:./plugins" --target "$TARGET" --port "$DL_PORT"
+"$CTL" env "$SESSION_ID" "LD_LIBRARY_PATH=.:./plugins" "GST_PLUGIN_PATH=/usr/lib/gstreamer-1.0" --target "$TARGET" --port "$DL_PORT"
 "$CTL" args "$SESSION_ID" "." --target "$TARGET" --port "$DL_PORT"
 
 # --- start --------------------------------------------------------------------
