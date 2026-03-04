@@ -52,7 +52,7 @@
     {
       "label": "docker: flutter build linux arm64 (example)",
       "type": "shell",
-      "command": "rm -f example/linux/flutter/ephemeral/.plugin_symlinks/openautoflutter && sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder-arm64 bash -c \"flutter pub get && flutter build linux\"' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/openautoflutter",
+      "command": "rm -f example/linux/flutter/ephemeral/.plugin_symlinks/openautoflutter && sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -v openautoflutter-arm64-pub-cache:/root/.pub-cache -v openautoflutter-arm64-ccache:/root/.ccache -w /workspace/example openautoflutter-builder-arm64 bash -c \"flutter pub get && flutter build linux\"' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/openautoflutter",
       "dependsOn": "docker: build builder image (arm64)",
       "options": {
         "cwd": "${workspaceFolder}"
@@ -62,8 +62,8 @@
     {
       "label": "debuglantern: build debug bundle (arm64)",
       "type": "shell",
-      "command": "sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -w /workspace openautoflutter-builder-arm64 bash scripts/build_flutter_drm_release_arm64.sh example' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/openautoflutter",
-      "dependsOn": "docker: flutter build linux arm64 (example)",
+      "command": "sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -v openautoflutter-arm64-pub-cache:/root/.pub-cache -v openautoflutter-arm64-ccache:/root/.ccache -w /workspace openautoflutter-builder-arm64 bash scripts/build_flutter_drm_release_arm64.sh example' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/openautoflutter",
+      "dependsOn": "docker: build builder image (arm64)",
       "options": {
         "cwd": "${workspaceFolder}"
       },

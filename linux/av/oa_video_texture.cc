@@ -194,6 +194,9 @@ struct _OAVideoTexture {
 
     bool nv12_inited = false;
     bool logged_path = false;
+
+    // Once DMA-BUF import succeeds at least once, never fall back to CPU.
+    bool dmabuf_proven = false;
 };
 
 struct _OAVideoTextureClass {
@@ -740,6 +743,7 @@ static gboolean oa_video_texture_populate(FlTextureGL* texture,
         // Try multi-plane NV12 import first (driver handles YUV→RGB)
         bool ok = upload_nv12_dmabuf_multiplane(self, slot);
         if (ok) {
+            self->dmabuf_proven = true;
             render_ext_oes_to_rgba(self, w, h);
             if (!self->logged_path) {
                 std::cout << "[OAVideoTexture] rendering NV12 DMA-BUF multi-plane (zero-copy, OES)\n";
@@ -748,22 +752,47 @@ static gboolean oa_video_texture_populate(FlTextureGL* texture,
             break;
         }
 
+        // If DMA-BUF was already proven, this is a transient failure —
+        // skip per-plane attempt and reuse the last good frame.
+        if (self->dmabuf_proven) {
+            std::cerr << "[OAVideoTexture] DMA-BUF transient import failure for "
+                      << w << "x" << h << " (reusing last frame)\n";
+            if (self->gl_tex && self->tex_w > 0) {
+                *target = GL_TEXTURE_2D;
+                *name   = self->gl_tex;
+                *width  = (uint32_t)self->tex_w;
+                *height = (uint32_t)self->tex_h;
+                return TRUE;
+            }
+            emit_fallback("DMA-BUF transient failure, no prior frame");
+            return TRUE;
+        }
+
         // Fall back to per-plane R8/GR88 import
         ensure_nv12_resources(self);
         if (!self->nv12_inited) { emit_fallback("NV12 shader init failed (dmabuf)"); return TRUE; }
 
         ok = upload_nv12_dmabuf(self, slot);
         if (ok) {
+            self->dmabuf_proven = true;
             render_nv12_to_rgba(self, w, h);
             if (!self->logged_path) {
                 std::cout << "[OAVideoTexture] rendering NV12 DMA-BUF per-plane (zero-copy)\n";
                 self->logged_path = true;
             }
         } else {
-            std::cerr << "[OAVideoTexture] DMA-BUF EGL import failed for "
-                      << w << "x" << h << "\n";
-            buf->dmabuf_import_failed.store(true, std::memory_order_relaxed);
-            // Can't fall back to CPU (data is in fds, not mapped).
+            // If DMA-BUF previously succeeded, treat this as a transient
+            // failure — reuse the last good frame instead of permanently
+            // switching the decoder to the much slower NV12-CPU path.
+            if (self->dmabuf_proven) {
+                std::cerr << "[OAVideoTexture] DMA-BUF transient import failure for "
+                          << w << "x" << h << " (reusing last frame)\n";
+            } else {
+                std::cerr << "[OAVideoTexture] DMA-BUF EGL import failed for "
+                          << w << "x" << h << "\n";
+                buf->dmabuf_import_failed.store(true, std::memory_order_relaxed);
+            }
+            // Return last good texture if available
             if (self->gl_tex && self->tex_w > 0) {
                 *target = GL_TEXTURE_2D;
                 *name   = self->gl_tex;

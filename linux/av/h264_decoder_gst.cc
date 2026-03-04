@@ -21,12 +21,19 @@
 
 #include "h264_decoder.h"
 
+// Uncomment to print decode performance stats every 300 frames.
+#define DECODE_PERF_STATS 1
+
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
 #include <vector>
+
+#ifdef DECODE_PERF_STATS
+#include <chrono>
+#endif
 
 #include <unistd.h>       // dup(), close()
 
@@ -109,6 +116,19 @@ struct H264Decoder::Impl {
     int dmabuf_count = 0;
     int nv12_cpu_count = 0;
     int rgba_count   = 0;
+
+#ifdef DECODE_PERF_STATS
+    // Perf stats — accumulated over PERF_INTERVAL frames, then printed.
+    static constexpr int PERF_INTERVAL = 300;
+    int    perf_count        = 0;
+    double perf_extract_us   = 0;  // extraction (DMA-BUF dup / CPU copy)
+    double perf_total_us     = 0;  // full on_new_sample wall time
+    double perf_extract_min  = 1e9;
+    double perf_extract_max  = 0;
+    double perf_total_min    = 1e9;
+    double perf_total_max    = 0;
+    using perf_clock = std::chrono::steady_clock;
+#endif
 
     DropBuffer*        buf = nullptr;
     FrameReadyCallback frame_ready_cb;
@@ -296,6 +316,9 @@ struct H264Decoder::Impl {
     }
 
     GstFlowReturn on_new_sample() {
+#ifdef DECODE_PERF_STATS
+        auto perf_t0 = perf_clock::now();
+#endif
         GstSample* sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
         if (!sample) return GST_FLOW_OK;
 
@@ -358,6 +381,9 @@ struct H264Decoder::Impl {
             dmabuf_runtime_disabled_cached = true;
             std::cout << "[H264Decoder] DMA-BUF import failed on GL side; switching to NV12-CPU\n";
         }
+#ifdef DECODE_PERF_STATS
+        auto perf_t_extract = perf_clock::now();
+#endif
         if (is_nv12 && !dmabuf_runtime_disabled_cached) {
             ok = try_extract_nv12_dmabuf(sample, buffer, caps,
                                          have_vinfo ? &vinfo : nullptr,
@@ -373,6 +399,9 @@ struct H264Decoder::Impl {
         if (!ok && have_vinfo) {
             ok = try_extract_rgba(sample, buffer, &vinfo, w, h, write_slot);
         }
+#ifdef DECODE_PERF_STATS
+        auto perf_t_extract_end = perf_clock::now();
+#endif
 
         gst_sample_unref(sample);
 
@@ -398,6 +427,36 @@ struct H264Decoder::Impl {
         if (frame_ready_cb)
             frame_ready_cb();
 
+#ifdef DECODE_PERF_STATS
+        {
+            auto perf_t_end = perf_clock::now();
+            double ext_us = std::chrono::duration<double, std::micro>(perf_t_extract_end - perf_t_extract).count();
+            double tot_us = std::chrono::duration<double, std::micro>(perf_t_end - perf_t0).count();
+            perf_extract_us += ext_us;
+            perf_total_us   += tot_us;
+            if (ext_us < perf_extract_min) perf_extract_min = ext_us;
+            if (ext_us > perf_extract_max) perf_extract_max = ext_us;
+            if (tot_us < perf_total_min) perf_total_min = tot_us;
+            if (tot_us > perf_total_max) perf_total_max = tot_us;
+            ++perf_count;
+            if (perf_count >= PERF_INTERVAL) {
+                double avg_ext = perf_extract_us / perf_count;
+                double avg_tot = perf_total_us   / perf_count;
+                std::cout << "[H264Decoder] perf (" << perf_count << " frames): "
+                          << "extract avg=" << (int)avg_ext << "us "
+                          << "min=" << (int)perf_extract_min << "us "
+                          << "max=" << (int)perf_extract_max << "us | "
+                          << "total avg=" << (int)avg_tot << "us "
+                          << "min=" << (int)perf_total_min << "us "
+                          << "max=" << (int)perf_total_max << "us "
+                          << "(" << (int)(1e6 / avg_tot) << " fps throughput)\n";
+                perf_count = 0;
+                perf_extract_us = perf_total_us = 0;
+                perf_extract_min = perf_total_min = 1e9;
+                perf_extract_max = perf_total_max = 0;
+            }
+        }
+#endif
         return GST_FLOW_OK;
     }
 

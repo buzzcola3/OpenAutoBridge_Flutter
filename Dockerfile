@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     ninja-build \
     cmake \
+    ccache \
     libgtk-3-dev \
   libunwind-dev \
     liblzma-dev \
@@ -76,8 +77,12 @@ RUN echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} ma
   && ln -sf /usr/bin/clang++-${LLVM_VERSION} /usr/bin/clang++ \
   && rm -rf /var/lib/apt/lists/*
 
+# Plain compiler vars for image-build steps (capnproto, etc.)
 ENV CC=clang-${LLVM_VERSION}
 ENV CXX=clang++-${LLVM_VERSION}
+
+# Persist pub package cache across container runs.
+ENV PUB_CACHE=/root/.pub-cache
 
 # Cap'n Proto 1.1.0 (matches OpenAutoTransport prebuilt)
 RUN curl -fsSL https://capnproto.org/capnproto-c++-1.1.0.tar.gz -o /tmp/capnp.tar.gz \
@@ -109,9 +114,16 @@ RUN mkdir -p /opt \
 
 # Precache Linux artifacts and validate
 RUN git config --global --add safe.directory /opt/flutter \
+  && git config --global --add safe.directory '*' \
   && flutter config --enable-linux-desktop \
   && flutter precache --linux \
   && flutter doctor -v
+
+# Override CC/CXX with ccache wrappers for runtime builds.
+# ccache dir is mounted as a named Docker volume at runtime.
+ENV CCACHE_DIR=/root/.ccache
+ENV CC="ccache clang-${LLVM_VERSION}"
+ENV CXX="ccache clang++-${LLVM_VERSION}"
 
 WORKDIR /workspace
 CMD ["/bin/bash"]

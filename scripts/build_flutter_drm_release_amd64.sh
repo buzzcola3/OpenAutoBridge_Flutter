@@ -14,6 +14,7 @@ BUNDLER_CMD=()
 BUNDLER_GIT_URL="${BUNDLER_GIT_URL:-https://github.com/buzzcola3/flutter-drm-bundler}"
 BUNDLER_GIT_REF="${BUNDLER_GIT_REF:-main}"
 BUNDLER_PATH="${BUNDLER_PATH:-}"
+BUNDLER_ALWAYS_CHECK_UPDATES="${BUNDLER_ALWAYS_CHECK_UPDATES:-1}"
 
 resolve_bundler() {
   if [[ -n "$BUNDLER_PATH" && -x "$BUNDLER_PATH" ]]; then
@@ -34,15 +35,35 @@ resolve_bundler() {
   done
 
   local tool_dir="$ROOT_DIR/.cache/flutter-drm-bundler"
+  local rebuild_bundler=0
   if [[ ! -d "$tool_dir/.git" ]]; then
     rm -rf "$tool_dir"
     git clone --depth 1 --branch "$BUNDLER_GIT_REF" "$BUNDLER_GIT_URL" "$tool_dir"
+    rebuild_bundler=1
   fi
 
   pushd "$tool_dir" >/dev/null
-  flutter pub get
-  mkdir -p build
-  dart compile exe bin/flutter_drm_bundler.dart -o build/flutter_drm_bundler
+  git remote set-url origin "$BUNDLER_GIT_URL"
+  if [[ "$BUNDLER_ALWAYS_CHECK_UPDATES" == "1" ]]; then
+    local old_head="$(git rev-parse HEAD 2>/dev/null || true)"
+    git fetch --depth 1 origin "$BUNDLER_GIT_REF"
+    local new_head="$(git rev-parse FETCH_HEAD 2>/dev/null || true)"
+    if [[ -n "$new_head" && "$new_head" != "$old_head" ]]; then
+      git checkout -B "$BUNDLER_GIT_REF" FETCH_HEAD
+      rebuild_bundler=1
+      echo "[bundler] updated to $new_head"
+    fi
+  fi
+
+  if [[ ! -x build/flutter_drm_bundler ]]; then
+    rebuild_bundler=1
+  fi
+
+  if [[ "$rebuild_bundler" == "1" ]]; then
+    flutter pub get
+    mkdir -p build
+    dart compile exe bin/flutter_drm_bundler.dart -o build/flutter_drm_bundler
+  fi
   popd >/dev/null
 
   if [[ -x "$tool_dir/build/flutter_drm_bundler" ]]; then
