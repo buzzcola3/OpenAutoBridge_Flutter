@@ -37,6 +37,7 @@ struct _OpenautoflutterPlugin {
   std::unique_ptr<NativeTransport> transport; // OpenAutoTransport receiver
   std::unique_ptr<OatMessageHandlers> handlers;
   FlTextureRegistrar* texture_registrar; // to mark frames available
+  FlMethodChannel* method_channel; // kept alive for native→Dart calls
   bool handlers_installed;
   std::unique_ptr<DropBuffer> drop_buffer; // shared state between decoder & texture
 };
@@ -75,6 +76,15 @@ static void openautoflutter_plugin_handle_method_call(
     } else {
       response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
     }
+  } else if (strcmp(method, "sendConfigJson") == 0) {
+    std::string error;
+    if (!self->handlers) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("not_ready", "Handlers not initialized", nullptr));
+    } else if (!self->handlers->handleConfigMethod(fl_method_call_get_args(method_call), error)) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("invalid_args", error.c_str(), nullptr));
+    } else {
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+    }
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }
@@ -102,6 +112,7 @@ static void openautoflutter_plugin_dispose(GObject* object) {
   if (self->video_texture != nullptr) {
     g_clear_object(&self->video_texture);
   }
+  g_clear_object(&self->method_channel);
   self->drop_buffer.reset();
   G_OBJECT_CLASS(openautoflutter_plugin_parent_class)->dispose(object);
 }
@@ -115,6 +126,7 @@ static void openautoflutter_plugin_init(OpenautoflutterPlugin* self) {
   self->texture_id = 0;
   self->transport = std::make_unique<NativeTransport>();
   self->texture_registrar = nullptr;
+  self->method_channel = nullptr;
   self->handlers_installed = false;
   self->drop_buffer = std::make_unique<DropBuffer>();
 
@@ -140,10 +152,11 @@ void openautoflutter_plugin_register_with_registrar(FlPluginRegistrar* registrar
       g_object_new(openautoflutter_plugin_get_type(), nullptr));
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
-  g_autoptr(FlMethodChannel) channel =
+  FlMethodChannel* channel =
       fl_method_channel_new(fl_plugin_registrar_get_messenger(registrar),
                             "openautoflutter",
                             FL_METHOD_CODEC(codec));
+  plugin->method_channel = channel;
   fl_method_channel_set_method_call_handler(channel, method_call_cb,
                                             g_object_ref(plugin),
                                             g_object_unref);
@@ -156,7 +169,7 @@ void openautoflutter_plugin_register_with_registrar(FlPluginRegistrar* registrar
   plugin->texture_registrar = texture_registrar;
 
   if (plugin->transport && !plugin->handlers_installed) {
-    plugin->handlers = std::make_unique<OatMessageHandlers>(*plugin->transport, plugin->video_texture, plugin->texture_registrar, plugin->drop_buffer.get());
+    plugin->handlers = std::make_unique<OatMessageHandlers>(*plugin->transport, plugin->video_texture, plugin->texture_registrar, plugin->drop_buffer.get(), plugin->method_channel);
     plugin->handlers->install();
     plugin->handlers_installed = true;
   }

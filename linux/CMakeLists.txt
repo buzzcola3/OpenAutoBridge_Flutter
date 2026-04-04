@@ -23,7 +23,6 @@ list(APPEND PLUGIN_SOURCES
   "openautoflutter_plugin.cc"
   "oat_message_handlers.cpp"
   "av/oa_video_texture.cc"
-  "common/SharedMemoryConsumer.cpp"
   "av/h264_decoder_gst.cc"
 )
 
@@ -61,7 +60,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(${PLUGIN_NAME} PRIVATE Threads::Threads)
 
 ## OpenAutoTransport (prebuilt) fetch + link
-set(OPENAUTO_TRANSPORT_VERSION "v0.0.24" CACHE STRING "OpenAutoTransport release tag" FORCE)
+set(OPENAUTO_TRANSPORT_VERSION "v0.0.28" CACHE STRING "OpenAutoTransport release tag" FORCE)
 if(NOT DEFINED OPENAUTO_TRANSPORT_VARIANT)
   string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _proc)
   if(_proc MATCHES "x86_64|amd64")

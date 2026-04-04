@@ -30,7 +30,7 @@
     {
       "label": "docker: flutter build linux (example)",
       "type": "shell",
-      "command": "sg docker -c 'docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder flutter build linux -v'",
+      "command": "sg docker -c 'docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder bash -c \"flutter pub get && flutter build linux\"'",
       "dependsOn": "docker: build builder image",
       "group": {
         "kind": "build",
@@ -79,7 +79,7 @@
       "problemMatcher": []
     },
     {
-      "label": "debuglantern: deploy & debug",
+      "label": "debuglantern: build and debug on pi",
       "type": "shell",
       "command": "bash scripts/debuglantern_deploy.sh --arch arm64 --target ${input:dlTarget}",
       "options": {
@@ -89,7 +89,7 @@
       "problemMatcher": []
     },
     {
-      "label": "debuglantern: upload existing bundle",
+      "label": "debuglantern: upload and debug on pi",
       "type": "shell",
       "command": "bash scripts/debuglantern_deploy.sh --arch arm64 --target ${input:dlTarget}",
       "options": {
@@ -98,13 +98,26 @@
       "problemMatcher": []
     },
     {
-      "label": "debuglantern: deploy (no debug)",
+      "label": "debuglantern: build and deploy on pi (no debug)",
       "type": "shell",
       "command": "bash scripts/debuglantern_deploy.sh --arch arm64 --target ${input:dlTarget} --no-debug",
       "options": {
         "cwd": "${workspaceFolder}"
       },
       "dependsOn": "debuglantern: build debug bundle (arm64)",
+      "problemMatcher": []
+    },
+    {
+      "label": "run example (x64)",
+      "type": "shell",
+      "command": "${workspaceFolder}/example/build/linux/x64/release/bundle/openautoflutter_example",
+      "options": {
+        "cwd": "${workspaceFolder}/example/build/linux/x64/release/bundle",
+        "env": {
+          "LD_LIBRARY_PATH": "${workspaceFolder}/example/build/linux/x64/release/bundle/lib"
+        }
+      },
+      "dependsOn": "docker: flutter build linux (example)",
       "problemMatcher": []
     }
   ]

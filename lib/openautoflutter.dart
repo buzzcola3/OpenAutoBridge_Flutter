@@ -1,4 +1,6 @@
 
+import 'dart:convert';
+
 import 'openautoflutter_platform_interface.dart';
 
 /// Touch actions mirrored on native side.
@@ -77,5 +79,38 @@ class Openautoflutter {
   ///   no_voice_input, no_config, limit_message_len
   Future<void> sendSensorJson(String json) {
     return OpenautoflutterPlatform.instance.sendSensorJson(json);
+  }
+
+  /// Requests the current config from the core (side A) over transport.
+  ///
+  /// Sends a `{"action": "get"}` message over `MsgType::CONFIGURATION`
+  /// and waits for the core to respond with the current config JSON.
+  /// If the core does not respond within 5 seconds, returns `null`.
+  ///
+  /// Returns the parsed JSON map, or `null` on timeout / error.
+  Future<Map<String, dynamic>?> getConfig() {
+    return OpenautoflutterPlatform.instance.getConfig();
+  }
+
+  /// Replaces the running config on the core (side A).
+  ///
+  /// [config] must match the schema of
+  /// `ServiceDiscoveryResponse.default.json`. The core validates the
+  /// JSON by constructing the protobuf; if validation fails the request
+  /// is silently dropped.
+  ///
+  /// Fire-and-forget — there is no response.
+  Future<void> sendConfigSet(Map<String, dynamic> config) {
+    final request = jsonEncode({'action': 'set', 'config': config});
+    return OpenautoflutterPlatform.instance.sendConfigJson(request);
+  }
+
+  /// Deletes the user overlay and reloads the shipped default on the
+  /// core (side A).
+  ///
+  /// Fire-and-forget — there is no response.
+  Future<void> sendConfigReset() {
+    final request = jsonEncode({'action': 'reset'});
+    return OpenautoflutterPlatform.instance.sendConfigJson(request);
   }
 }

@@ -43,4 +43,12 @@ abstract class OpenautoflutterPlatform extends PlatformInterface {
   Future<void> sendSensorJson(String json) {
     throw UnimplementedError('sendSensorJson() has not been implemented.');
   }
+
+  Future<void> sendConfigJson(String json) {
+    throw UnimplementedError('sendConfigJson() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> getConfig() {
+    throw UnimplementedError('getConfig() has not been implemented.');
+  }
 }

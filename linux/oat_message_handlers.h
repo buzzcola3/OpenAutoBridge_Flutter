@@ -19,11 +19,13 @@ public:
   OatMessageHandlers(NativeTransport& transport,
                      OAVideoTexture* texture,
                      FlTextureRegistrar* registrar,
-                     DropBuffer* drop_buffer);
+                     DropBuffer* drop_buffer,
+                     FlMethodChannel* channel);
 
   void install();
   bool handleTouchMethod(FlValue* args, std::string& error);
   bool handleSensorMethod(FlValue* args, std::string& error);
+  bool handleConfigMethod(FlValue* args, std::string& error);
 
   /// Access the decoder (e.g. for start/stop lifecycle control).
   H264Decoder& decoder() { return decoder_; }
@@ -32,11 +34,13 @@ private:
   static std::string hexHead(const uint8_t* data, std::size_t size, std::size_t max_bytes = 32);
 
   void handleVideo(uint64_t envelope_ts, const void* data, std::size_t size);
+  void handleConfigResponse(uint64_t envelope_ts, const void* data, std::size_t size);
 
   NativeTransport& transport_;
   OAVideoTexture* texture_;
   FlTextureRegistrar* registrar_;
   DropBuffer* drop_buffer_;
+  FlMethodChannel* channel_;
   H264Decoder decoder_;
   bool installed_;
 };

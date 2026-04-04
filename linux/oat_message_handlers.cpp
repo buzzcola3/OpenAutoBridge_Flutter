@@ -119,11 +119,13 @@ bool parse_sensor_args(FlValue* args, std::string& json, std::string& error) {
 OatMessageHandlers::OatMessageHandlers(NativeTransport& transport,
                                                                              OAVideoTexture* texture,
                                                                              FlTextureRegistrar* registrar,
-                                                                             DropBuffer* drop_buffer)
+                                                                             DropBuffer* drop_buffer,
+                                                                             FlMethodChannel* channel)
         : transport_(transport),
             texture_(texture),
             registrar_(registrar),
             drop_buffer_(drop_buffer),
+            channel_(channel),
             decoder_(),
             installed_(false) {
     decoder_.set_buffer(drop_buffer_);
@@ -161,6 +163,11 @@ void OatMessageHandlers::install() {
                 handleVideo(ts, data, size);
             });
 
+    transport_.addTypeHandler(buzz::wire::MsgType::CONFIGURATION,
+            [this](uint64_t ts, const void* data, std::size_t size) {
+                handleConfigResponse(ts, data, size);
+            });
+
 }
 
 bool OatMessageHandlers::handleTouchMethod(FlValue* args, std::string& error) {
@@ -196,4 +203,50 @@ bool OatMessageHandlers::handleSensorMethod(FlValue* args, std::string& error) {
         g_warning("OAT: transport not running; dropping sensor event");
     }
     return true;
+}
+
+bool OatMessageHandlers::handleConfigMethod(FlValue* args, std::string& error) {
+    std::string json;
+    if (!parse_sensor_args(args, json, error)) {
+        return false;
+    }
+
+    const auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (transport_.isRunning()) {
+        transport_.send(buzz::wire::MsgType::CONFIGURATION,
+                        static_cast<uint64_t>(now_us),
+                        json.data(),
+                        json.size());
+    } else {
+        g_warning("OAT: transport not running; dropping config event");
+    }
+    return true;
+}
+
+// --- Config response from core (transport thread → main thread) -----------
+
+namespace {
+struct ConfigResponseCbData {
+    FlMethodChannel* channel;
+    std::string json;
+};
+
+gboolean config_response_idle_cb(gpointer user_data) {
+    auto* d = static_cast<ConfigResponseCbData*>(user_data);
+    g_autoptr(FlValue) args = fl_value_new_string(d->json.c_str());
+    fl_method_channel_invoke_method(d->channel, "onConfigReceived", args,
+                                    nullptr, nullptr, nullptr);
+    delete d;
+    return G_SOURCE_REMOVE;
+}
+}  // namespace
+
+void OatMessageHandlers::handleConfigResponse(uint64_t /*envelope_ts*/,
+                                              const void* data,
+                                              std::size_t size) {
+    if (!channel_) return;
+    auto* cb = new ConfigResponseCbData{channel_,
+                                        std::string(static_cast<const char*>(data), size)};
+    g_idle_add(config_response_idle_cb, cb);
 }

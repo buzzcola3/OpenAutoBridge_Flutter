@@ -125,79 +125,423 @@ class _MyAppState extends State<MyApp> {
     _activePointers.remove(event.pointer);
   }
 
+  void _openConfigPage() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ConfigPage(plugin: _openautoflutterPlugin),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Plugin example app'),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text('Running on: $_platformVersion'),
-                const SizedBox(height: 12),
-                if (_videoTextureId == null)
-                  const Text('Texture not available')
-                else ...[
-                  Text('Texture ID: $_videoTextureId'),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _sendSensorSample,
-                    child: const Text('Send sensor JSON'),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _sendNightModeSample,
-                    child: const Text('Send night mode JSON'),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _sendDrivingStatusSample,
-                    child: const Text('Send driving status JSON'),
-                  ),
-                  const SizedBox(height: 8),
-                  // Render the native GL video texture with flex to avoid overflow.
-                  Flexible(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final double maxWidth = constraints.maxWidth;
-                        final double maxHeight = constraints.maxHeight;
-                        const double aspect = 16 / 9;
-
-                        double width = maxWidth;
-                        double height = width / aspect;
-                        if (height > maxHeight) {
-                          height = maxHeight;
-                          width = height * aspect;
-                        }
-                        _textureSize = Size(width, height);
-
-                        return Center(
-                          child: SizedBox(
-                            width: width,
-                            height: height,
-                            child: Listener(
-                              onPointerDown: _handlePointerDown,
-                              onPointerMove: _handlePointerMove,
-                              onPointerUp: _handlePointerUp,
-                              onPointerCancel: _handlePointerCancel,
-                              child: Texture(textureId: _videoTextureId!),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+      home: Builder(
+        builder: (context) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Plugin example app'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  tooltip: 'Service Config',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ConfigPage(plugin: _openautoflutterPlugin),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text('Running on: $_platformVersion'),
+                    const SizedBox(height: 12),
+                    if (_videoTextureId == null)
+                      const Text('Texture not available')
+                    else ...[
+                      Text('Texture ID: $_videoTextureId'),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _sendSensorSample,
+                        child: const Text('Send sensor JSON'),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _sendNightModeSample,
+                        child: const Text('Send night mode JSON'),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _sendDrivingStatusSample,
+                        child: const Text('Send driving status JSON'),
+                      ),
+                      const SizedBox(height: 8),
+                      // Render the native GL video texture with flex to avoid overflow.
+                      Flexible(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final double maxWidth = constraints.maxWidth;
+                            final double maxHeight = constraints.maxHeight;
+                            const double aspect = 16 / 9;
+
+                            double width = maxWidth;
+                            double height = width / aspect;
+                            if (height > maxHeight) {
+                              height = maxHeight;
+                              width = height * aspect;
+                            }
+                            _textureSize = Size(width, height);
+
+                            return Center(
+                              child: SizedBox(
+                                width: width,
+                                height: height,
+                                child: Listener(
+                                  onPointerDown: _handlePointerDown,
+                                  onPointerMove: _handlePointerMove,
+                                  onPointerUp: _handlePointerUp,
+                                  onPointerCancel: _handlePointerCancel,
+                                  child: Texture(textureId: _videoTextureId!),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Configuration page
+// ---------------------------------------------------------------------------
+
+class ConfigPage extends StatefulWidget {
+  const ConfigPage({super.key, required this.plugin});
+  final Openautoflutter plugin;
+
+  @override
+  State<ConfigPage> createState() => _ConfigPageState();
+}
+
+class _ConfigPageState extends State<ConfigPage> {
+  Map<String, dynamic>? _config;
+  bool _loading = true;
+  String? _status;
+
+  // Editable top-level fields
+  late TextEditingController _displayNameCtrl;
+  String _driverPosition = 'DRIVER_POSITION_LEFT';
+  bool _canPlayNativeMedia = false;
+
+  // Video channel (id 3)
+  String _codecResolution = 'VIDEO_800x480';
+  String _frameRate = 'VIDEO_FPS_30';
+  late TextEditingController _densityCtrl;
+
+  // Headunit info
+  late TextEditingController _huMakeCtrl;
+  late TextEditingController _huModelCtrl;
+  late TextEditingController _huYearCtrl;
+  late TextEditingController _huSoftwareVersionCtrl;
+
+  static const _resolutions = [
+    'VIDEO_800x480',
+    'VIDEO_1280x720',
+    'VIDEO_1920x1080',
+  ];
+  static const _frameRates = ['VIDEO_FPS_30', 'VIDEO_FPS_60'];
+  static const _driverPositions = [
+    'DRIVER_POSITION_LEFT',
+    'DRIVER_POSITION_RIGHT',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _displayNameCtrl = TextEditingController();
+    _densityCtrl = TextEditingController();
+    _huMakeCtrl = TextEditingController();
+    _huModelCtrl = TextEditingController();
+    _huYearCtrl = TextEditingController();
+    _huSoftwareVersionCtrl = TextEditingController();
+    _loadConfig();
+  }
+
+  @override
+  void dispose() {
+    _displayNameCtrl.dispose();
+    _densityCtrl.dispose();
+    _huMakeCtrl.dispose();
+    _huModelCtrl.dispose();
+    _huYearCtrl.dispose();
+    _huSoftwareVersionCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadConfig() async {
+    final config = await widget.plugin.getConfig();
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _config = config;
+      if (config != null) _populateFields(config);
+    });
+  }
+
+  void _populateFields(Map<String, dynamic> config) {
+    _displayNameCtrl.text = config['display_name'] ?? '';
+    _driverPosition = config['driver_position'] ?? 'DRIVER_POSITION_LEFT';
+    _canPlayNativeMedia = config['can_play_native_media_during_vr'] ?? false;
+
+    // Find video channel (id 3)
+    final channels = config['channels'] as List<dynamic>? ?? [];
+    for (final ch in channels) {
+      if (ch['id'] == 3 && ch['media_sink_service'] != null) {
+        final sink = ch['media_sink_service'] as Map<String, dynamic>;
+        final videoConfigs = sink['video_configs'] as List<dynamic>? ?? [];
+        if (videoConfigs.isNotEmpty) {
+          final vc = videoConfigs[0] as Map<String, dynamic>;
+          _codecResolution = vc['codec_resolution'] ?? _codecResolution;
+          _frameRate = vc['frame_rate'] ?? _frameRate;
+          _densityCtrl.text = (vc['density'] ?? 140).toString();
+        }
+        break;
+      }
+    }
+
+    // Headunit info
+    final hu = config['headunit_info'] as Map<String, dynamic>? ?? {};
+    _huMakeCtrl.text = hu['make'] ?? '';
+    _huModelCtrl.text = hu['model'] ?? '';
+    _huYearCtrl.text = hu['year'] ?? '';
+    _huSoftwareVersionCtrl.text = hu['head_unit_software_version'] ?? '';
+  }
+
+  Map<String, dynamic> _buildConfig() {
+    final config = _config != null
+        ? Map<String, dynamic>.from(
+            jsonDecode(jsonEncode(_config)) as Map<String, dynamic>)
+        : <String, dynamic>{};
+
+    config['display_name'] = _displayNameCtrl.text;
+    config['driver_position'] = _driverPosition;
+    config['can_play_native_media_during_vr'] = _canPlayNativeMedia;
+
+    // Update video channel
+    final channels = (config['channels'] as List<dynamic>? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    for (final ch in channels) {
+      if (ch['id'] == 3 && ch['media_sink_service'] != null) {
+        final sink = Map<String, dynamic>.from(
+            ch['media_sink_service'] as Map);
+        final videoConfigs =
+            (sink['video_configs'] as List<dynamic>? ?? [])
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList();
+        if (videoConfigs.isNotEmpty) {
+          videoConfigs[0]['codec_resolution'] = _codecResolution;
+          videoConfigs[0]['frame_rate'] = _frameRate;
+          videoConfigs[0]['density'] =
+              int.tryParse(_densityCtrl.text) ?? 140;
+        }
+        sink['video_configs'] = videoConfigs;
+        ch['media_sink_service'] = sink;
+        break;
+      }
+    }
+    config['channels'] = channels;
+
+    // Update headunit info
+    final hu = Map<String, dynamic>.from(
+        config['headunit_info'] as Map? ?? {});
+    hu['make'] = _huMakeCtrl.text;
+    hu['model'] = _huModelCtrl.text;
+    hu['year'] = _huYearCtrl.text;
+    hu['head_unit_software_version'] = _huSoftwareVersionCtrl.text;
+    config['headunit_info'] = hu;
+
+    return config;
+  }
+
+  Future<void> _sendConfig() async {
+    final config = _buildConfig();
+    await widget.plugin.sendConfigSet(config);
+    if (!mounted) return;
+    setState(() => _status = 'Config sent');
+  }
+
+  Future<void> _resetConfig() async {
+    await widget.plugin.sendConfigReset();
+    if (!mounted) return;
+    setState(() => _status = 'Config reset sent');
+    _loadConfig();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Service Config'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.restore),
+            tooltip: 'Reset to default',
+            onPressed: _resetConfig,
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _config == null
+              ? const Center(child: Text('No config file found'))
+              : _buildForm(),
+      floatingActionButton: _config != null
+          ? FloatingActionButton.extended(
+              onPressed: _sendConfig,
+              icon: const Icon(Icons.send),
+              label: const Text('Apply'),
+            )
+          : null,
+    );
+  }
+
+  Widget _buildForm() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (_status != null) ...[
+          Text(_status!, style: TextStyle(color: Colors.green[700])),
+          const SizedBox(height: 12),
+        ],
+
+        // --- General ---
+        _sectionHeader('General'),
+        TextField(
+          controller: _displayNameCtrl,
+          decoration: const InputDecoration(labelText: 'Display Name'),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _driverPositions.contains(_driverPosition)
+              ? _driverPosition
+              : _driverPositions.first,
+          decoration: const InputDecoration(labelText: 'Driver Position'),
+          items: _driverPositions
+              .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+              .toList(),
+          onChanged: (v) => setState(() => _driverPosition = v!),
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          title: const Text('Can play native media during VR'),
+          value: _canPlayNativeMedia,
+          onChanged: (v) => setState(() => _canPlayNativeMedia = v),
+        ),
+
+        const SizedBox(height: 16),
+
+        // --- Video ---
+        _sectionHeader('Video (Channel 3)'),
+        DropdownButtonFormField<String>(
+          value: _resolutions.contains(_codecResolution)
+              ? _codecResolution
+              : _resolutions.first,
+          decoration: const InputDecoration(labelText: 'Resolution'),
+          items: _resolutions
+              .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+              .toList(),
+          onChanged: (v) => setState(() => _codecResolution = v!),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _frameRates.contains(_frameRate)
+              ? _frameRate
+              : _frameRates.first,
+          decoration: const InputDecoration(labelText: 'Frame Rate'),
+          items: _frameRates
+              .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+              .toList(),
+          onChanged: (v) => setState(() => _frameRate = v!),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _densityCtrl,
+          decoration: const InputDecoration(labelText: 'Density'),
+          keyboardType: TextInputType.number,
+        ),
+
+        const SizedBox(height: 16),
+
+        // --- Headunit Info ---
+        _sectionHeader('Headunit Info'),
+        TextField(
+          controller: _huMakeCtrl,
+          decoration: const InputDecoration(labelText: 'Make'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _huModelCtrl,
+          decoration: const InputDecoration(labelText: 'Model'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _huYearCtrl,
+          decoration: const InputDecoration(labelText: 'Year'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _huSoftwareVersionCtrl,
+          decoration: const InputDecoration(labelText: 'Software Version'),
+        ),
+
+        const SizedBox(height: 16),
+
+        // --- Raw JSON preview ---
+        _sectionHeader('Preview'),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: SelectableText(
+            const JsonEncoder.withIndent('  ').convert(_buildConfig()),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
           ),
         ),
+
+        const SizedBox(height: 80), // space for FAB
+      ],
+    );
+  }
+
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        title,
+        style: Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
   }

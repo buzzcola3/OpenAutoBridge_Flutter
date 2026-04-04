@@ -28,6 +28,16 @@ class MockOpenautoflutterPlatform
   Future<void> sendSensorJson(String json) {
     return Future.value();
   }
+
+  @override
+  Future<void> sendConfigJson(String json) {
+    return Future.value();
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getConfig() {
+    return Future.value({'test': true});
+  }
 }
 
 void main() {
