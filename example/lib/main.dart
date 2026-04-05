@@ -143,6 +143,17 @@ class _MyAppState extends State<MyApp> {
               title: const Text('Plugin example app'),
               actions: [
                 IconButton(
+                  icon: const Icon(Icons.usb),
+                  tooltip: 'Devices',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => DevicesPage(plugin: _openautoflutterPlugin),
+                      ),
+                    );
+                  },
+                ),
+                IconButton(
                   icon: const Icon(Icons.settings),
                   tooltip: 'Service Config',
                   onPressed: () {
@@ -543,6 +554,108 @@ class _ConfigPageState extends State<ConfigPage> {
             .titleMedium
             ?.copyWith(fontWeight: FontWeight.bold),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Devices page
+// ---------------------------------------------------------------------------
+
+class DevicesPage extends StatefulWidget {
+  const DevicesPage({super.key, required this.plugin});
+  final Openautoflutter plugin;
+
+  @override
+  State<DevicesPage> createState() => _DevicesPageState();
+}
+
+class _DevicesPageState extends State<DevicesPage> {
+  List<Map<String, dynamic>> _devices = [];
+  StreamSubscription<Map<String, dynamic>>? _controlSub;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _controlSub = widget.plugin.onControlReceived.listen(_onControl);
+    widget.plugin.requestDevices();
+  }
+
+  @override
+  void dispose() {
+    _controlSub?.cancel();
+    super.dispose();
+  }
+
+  void _onControl(Map<String, dynamic> msg) {
+    if (msg['action'] == 'device_list') {
+      final list = (msg['devices'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+      if (!mounted) return;
+      setState(() {
+        _devices = list;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _connect(String id) async {
+    await widget.plugin.connectDevice(id);
+  }
+
+  Future<void> _disconnect(String id) async {
+    await widget.plugin.disconnectDevice(id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Devices'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: () {
+              setState(() => _loading = true);
+              widget.plugin.requestDevices();
+            },
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _devices.isEmpty
+              ? const Center(child: Text('No devices available'))
+              : ListView.builder(
+                  itemCount: _devices.length,
+                  itemBuilder: (context, index) {
+                    final dev = _devices[index];
+                    final id = dev['id'] as String? ?? '';
+                    final type = dev['type'] as String? ?? 'unknown';
+                    final name = dev['name'] as String? ?? id;
+                    final status = dev['status'] as String? ?? 'available';
+                    final isConnected = status == 'connected';
+                    return ListTile(
+                      leading: Icon(
+                        type == 'wifi' ? Icons.wifi : Icons.usb,
+                        color: isConnected ? Colors.green : null,
+                      ),
+                      title: Text(name),
+                      subtitle: Text('$id • $status'),
+                      trailing: isConnected
+                          ? OutlinedButton(
+                              onPressed: () => _disconnect(id),
+                              child: const Text('Disconnect'),
+                            )
+                          : ElevatedButton(
+                              onPressed: () => _connect(id),
+                              child: const Text('Connect'),
+                            ),
+                    );
+                  },
+                ),
     );
   }
 }

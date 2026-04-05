@@ -168,6 +168,11 @@ void OatMessageHandlers::install() {
                 handleConfigResponse(ts, data, size);
             });
 
+    transport_.addTypeHandler(buzz::wire::MsgType::CONTROL,
+            [this](uint64_t ts, const void* data, std::size_t size) {
+                handleControlResponse(ts, data, size);
+            });
+
 }
 
 bool OatMessageHandlers::handleTouchMethod(FlValue* args, std::string& error) {
@@ -224,18 +229,19 @@ bool OatMessageHandlers::handleConfigMethod(FlValue* args, std::string& error) {
     return true;
 }
 
-// --- Config response from core (transport thread → main thread) -----------
+// --- Responses from core (transport thread → main thread) -----------------
 
 namespace {
-struct ConfigResponseCbData {
+struct ChannelCbData {
     FlMethodChannel* channel;
+    const char* method_name;
     std::string json;
 };
 
-gboolean config_response_idle_cb(gpointer user_data) {
-    auto* d = static_cast<ConfigResponseCbData*>(user_data);
+gboolean channel_invoke_idle_cb(gpointer user_data) {
+    auto* d = static_cast<ChannelCbData*>(user_data);
     g_autoptr(FlValue) args = fl_value_new_string(d->json.c_str());
-    fl_method_channel_invoke_method(d->channel, "onConfigReceived", args,
+    fl_method_channel_invoke_method(d->channel, d->method_name, args,
                                     nullptr, nullptr, nullptr);
     delete d;
     return G_SOURCE_REMOVE;
@@ -246,7 +252,35 @@ void OatMessageHandlers::handleConfigResponse(uint64_t /*envelope_ts*/,
                                               const void* data,
                                               std::size_t size) {
     if (!channel_) return;
-    auto* cb = new ConfigResponseCbData{channel_,
-                                        std::string(static_cast<const char*>(data), size)};
-    g_idle_add(config_response_idle_cb, cb);
+    auto* cb = new ChannelCbData{channel_, "onConfigReceived",
+                                 std::string(static_cast<const char*>(data), size)};
+    g_idle_add(channel_invoke_idle_cb, cb);
+}
+
+bool OatMessageHandlers::handleControlMethod(FlValue* args, std::string& error) {
+    std::string json;
+    if (!parse_sensor_args(args, json, error)) {
+        return false;
+    }
+
+    const auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (transport_.isRunning()) {
+        transport_.send(buzz::wire::MsgType::CONTROL,
+                        static_cast<uint64_t>(now_us),
+                        json.data(),
+                        json.size());
+    } else {
+        g_warning("OAT: transport not running; dropping control event");
+    }
+    return true;
+}
+
+void OatMessageHandlers::handleControlResponse(uint64_t /*envelope_ts*/,
+                                               const void* data,
+                                               std::size_t size) {
+    if (!channel_) return;
+    auto* cb = new ChannelCbData{channel_, "onControlReceived",
+                                 std::string(static_cast<const char*>(data), size)};
+    g_idle_add(channel_invoke_idle_cb, cb);
 }

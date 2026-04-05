@@ -85,6 +85,15 @@ static void openautoflutter_plugin_handle_method_call(
     } else {
       response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
     }
+  } else if (strcmp(method, "sendControlJson") == 0) {
+    std::string error;
+    if (!self->handlers) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("not_ready", "Handlers not initialized", nullptr));
+    } else if (!self->handlers->handleControlMethod(fl_method_call_get_args(method_call), error)) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("invalid_args", error.c_str(), nullptr));
+    } else {
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+    }
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }

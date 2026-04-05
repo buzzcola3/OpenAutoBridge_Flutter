@@ -1,4 +1,5 @@
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'openautoflutter_platform_interface.dart';
@@ -112,5 +113,40 @@ class Openautoflutter {
   Future<void> sendConfigReset() {
     final request = jsonEncode({'action': 'reset'});
     return OpenautoflutterPlatform.instance.sendConfigJson(request);
+  }
+
+  // ── Device control ──────────────────────────────────────────────────
+
+  /// Stream of control messages from the core (e.g. device_list updates).
+  Stream<Map<String, dynamic>> get onControlReceived {
+    return OpenautoflutterPlatform.instance.onControlReceived;
+  }
+
+  /// Requests the current list of available devices from the core.
+  ///
+  /// The core will respond asynchronously via [onControlReceived] with
+  /// `{"action": "device_list", "devices": [...]}`.
+  Future<void> requestDevices() {
+    final request = jsonEncode({'action': 'get_devices'});
+    return OpenautoflutterPlatform.instance.sendControlJson(request);
+  }
+
+  /// Tells the core to connect to the device with the given [id].
+  ///
+  /// [id] is the device identifier from the device list (e.g. "usb:18d1:2d01").
+  /// The core sets the device status to "connected" and broadcasts
+  /// an updated device_list.
+  Future<void> connectDevice(String id) {
+    final request = jsonEncode({'action': 'connect_device', 'id': id});
+    return OpenautoflutterPlatform.instance.sendControlJson(request);
+  }
+
+  /// Tells the core to disconnect the device with the given [id].
+  ///
+  /// The core stops the AA session and marks the device back as
+  /// "available", then broadcasts an updated device_list.
+  Future<void> disconnectDevice(String id) {
+    final request = jsonEncode({'action': 'disconnect_device', 'id': id});
+    return OpenautoflutterPlatform.instance.sendControlJson(request);
   }
 }

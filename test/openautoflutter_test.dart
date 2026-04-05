@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openautoflutter/openautoflutter.dart';
 import 'package:openautoflutter/openautoflutter_platform_interface.dart';
@@ -38,6 +40,16 @@ class MockOpenautoflutterPlatform
   Future<Map<String, dynamic>?> getConfig() {
     return Future.value({'test': true});
   }
+
+  @override
+  Future<void> sendControlJson(String json) {
+    return Future.value();
+  }
+
+  final _controlController = StreamController<Map<String, dynamic>>.broadcast();
+
+  @override
+  Stream<Map<String, dynamic>> get onControlReceived => _controlController.stream;
 }
 
 void main() {

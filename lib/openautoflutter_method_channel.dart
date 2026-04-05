@@ -13,6 +13,8 @@ class MethodChannelOpenautoflutter extends OpenautoflutterPlatform {
   final methodChannel = const MethodChannel('openautoflutter');
 
   Completer<Map<String, dynamic>?>? _configCompleter;
+  final StreamController<Map<String, dynamic>> _controlController =
+      StreamController<Map<String, dynamic>>.broadcast();
   bool _handlerInstalled = false;
 
   void _ensureHandler() {
@@ -27,6 +29,10 @@ class MethodChannelOpenautoflutter extends OpenautoflutterPlatform {
       final map = jsonDecode(json) as Map<String, dynamic>;
       _configCompleter?.complete(map);
       _configCompleter = null;
+    } else if (call.method == 'onControlReceived') {
+      final json = call.arguments as String;
+      final map = jsonDecode(json) as Map<String, dynamic>;
+      _controlController.add(map);
     }
   }
 
@@ -83,5 +89,18 @@ class MethodChannelOpenautoflutter extends OpenautoflutterPlatform {
         return null;
       },
     );
+  }
+
+  @override
+  Future<void> sendControlJson(String json) async {
+    await methodChannel.invokeMethod<void>('sendControlJson', <String, dynamic>{
+      'json': json,
+    });
+  }
+
+  @override
+  Stream<Map<String, dynamic>> get onControlReceived {
+    _ensureHandler();
+    return _controlController.stream;
   }
 }

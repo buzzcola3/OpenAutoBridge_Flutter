@@ -51,4 +51,13 @@ abstract class OpenautoflutterPlatform extends PlatformInterface {
   Future<Map<String, dynamic>?> getConfig() {
     throw UnimplementedError('getConfig() has not been implemented.');
   }
+
+  Future<void> sendControlJson(String json) {
+    throw UnimplementedError('sendControlJson() has not been implemented.');
+  }
+
+  /// Stream of control messages received from the core.
+  Stream<Map<String, dynamic>> get onControlReceived {
+    throw UnimplementedError('onControlReceived has not been implemented.');
+  }
 }
