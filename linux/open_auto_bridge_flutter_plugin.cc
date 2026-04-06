@@ -1,4 +1,4 @@
-#include "include/openautoflutter/openautoflutter_plugin.h"
+#include "include/open_auto_bridge_flutter/open_auto_bridge_flutter_plugin.h"
 #include "av/oa_video_texture.h"
 #include "transport.hpp"
 #include "wire.hpp"
@@ -22,15 +22,15 @@
 
 using NativeTransport = buzz::autoapp::Transport::Transport;
 
-#include "openautoflutter_plugin_private.h"
+#include "open_auto_bridge_flutter_plugin_private.h"
 
 
 
-#define OPENAUTOFLUTTER_PLUGIN(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj), openautoflutter_plugin_get_type(), \
-                              OpenautoflutterPlugin))
+#define OPEN_AUTO_BRIDGE_FLUTTER_PLUGIN(obj) \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj), open_auto_bridge_flutter_plugin_get_type(), \
+                              OpenAutoBridgeFlutterPlugin))
 
-struct _OpenautoflutterPlugin {
+struct _OpenAutoBridgeFlutterPlugin {
   GObject parent_instance;
   OAVideoTexture* video_texture;
   int64_t texture_id;
@@ -42,11 +42,11 @@ struct _OpenautoflutterPlugin {
   std::unique_ptr<DropBuffer> drop_buffer; // shared state between decoder & texture
 };
 
-G_DEFINE_TYPE(OpenautoflutterPlugin, openautoflutter_plugin, g_object_get_type())
+G_DEFINE_TYPE(OpenAutoBridgeFlutterPlugin, open_auto_bridge_flutter_plugin, g_object_get_type())
 
 // Called when a method call is received from Flutter.
-static void openautoflutter_plugin_handle_method_call(
-    OpenautoflutterPlugin* self,
+static void open_auto_bridge_flutter_plugin_handle_method_call(
+    OpenAutoBridgeFlutterPlugin* self,
     FlMethodCall* method_call) {
   g_autoptr(FlMethodResponse) response = nullptr;
 
@@ -109,8 +109,8 @@ FlMethodResponse* get_platform_version() {
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 
-static void openautoflutter_plugin_dispose(GObject* object) {
-  OpenautoflutterPlugin* self = OPENAUTOFLUTTER_PLUGIN(object);
+static void open_auto_bridge_flutter_plugin_dispose(GObject* object) {
+  OpenAutoBridgeFlutterPlugin* self = OPEN_AUTO_BRIDGE_FLUTTER_PLUGIN(object);
   if (self->handlers) {
     self->handlers.reset();
   }
@@ -123,14 +123,14 @@ static void openautoflutter_plugin_dispose(GObject* object) {
   }
   g_clear_object(&self->method_channel);
   self->drop_buffer.reset();
-  G_OBJECT_CLASS(openautoflutter_plugin_parent_class)->dispose(object);
+  G_OBJECT_CLASS(open_auto_bridge_flutter_plugin_parent_class)->dispose(object);
 }
 
-static void openautoflutter_plugin_class_init(OpenautoflutterPluginClass* klass) {
-  G_OBJECT_CLASS(klass)->dispose = openautoflutter_plugin_dispose;
+static void open_auto_bridge_flutter_plugin_class_init(OpenAutoBridgeFlutterPluginClass* klass) {
+  G_OBJECT_CLASS(klass)->dispose = open_auto_bridge_flutter_plugin_dispose;
 }
 
-static void openautoflutter_plugin_init(OpenautoflutterPlugin* self) {
+static void open_auto_bridge_flutter_plugin_init(OpenAutoBridgeFlutterPlugin* self) {
   self->video_texture = nullptr;
   self->texture_id = 0;
   self->transport = std::make_unique<NativeTransport>();
@@ -152,18 +152,18 @@ static void openautoflutter_plugin_init(OpenautoflutterPlugin* self) {
 
 static void method_call_cb(FlMethodChannel* channel, FlMethodCall* method_call,
                            gpointer user_data) {
-  OpenautoflutterPlugin* plugin = OPENAUTOFLUTTER_PLUGIN(user_data);
-  openautoflutter_plugin_handle_method_call(plugin, method_call);
+  OpenAutoBridgeFlutterPlugin* plugin = OPEN_AUTO_BRIDGE_FLUTTER_PLUGIN(user_data);
+  open_auto_bridge_flutter_plugin_handle_method_call(plugin, method_call);
 }
 
-void openautoflutter_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
-  OpenautoflutterPlugin* plugin = OPENAUTOFLUTTER_PLUGIN(
-      g_object_new(openautoflutter_plugin_get_type(), nullptr));
+void open_auto_bridge_flutter_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
+  OpenAutoBridgeFlutterPlugin* plugin = OPEN_AUTO_BRIDGE_FLUTTER_PLUGIN(
+      g_object_new(open_auto_bridge_flutter_plugin_get_type(), nullptr));
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   FlMethodChannel* channel =
       fl_method_channel_new(fl_plugin_registrar_get_messenger(registrar),
-                            "openautoflutter",
+                            "open_auto_bridge_flutter",
                             FL_METHOD_CODEC(codec));
   plugin->method_channel = channel;
   fl_method_channel_set_method_call_handler(channel, method_call_cb,

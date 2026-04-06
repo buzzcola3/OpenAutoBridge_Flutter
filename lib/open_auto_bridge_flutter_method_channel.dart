@@ -4,13 +4,13 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import 'openautoflutter_platform_interface.dart';
+import 'open_auto_bridge_flutter_platform_interface.dart';
 
-/// An implementation of [OpenautoflutterPlatform] that uses method channels.
-class MethodChannelOpenautoflutter extends OpenautoflutterPlatform {
+/// An implementation of [OpenAutoBridgePlatform] that uses method channels.
+class MethodChannelOpenAutoBridge extends OpenAutoBridgePlatform {
   /// The method channel used to interact with the native platform.
   @visibleForTesting
-  final methodChannel = const MethodChannel('openautoflutter');
+  final methodChannel = const MethodChannel('open_auto_bridge_flutter');
 
   Completer<Map<String, dynamic>?>? _configCompleter;
   final StreamController<Map<String, dynamic>> _controlController =

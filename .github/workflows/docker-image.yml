@@ -14,7 +14,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: buzzcola3/openautoflutter-builder
+  IMAGE_NAME: buzzcola3/openautobridge-flutter-builder
 
 jobs:
   build-and-push:

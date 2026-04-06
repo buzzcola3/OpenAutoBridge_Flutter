@@ -1,24 +1,24 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
-import 'openautoflutter_method_channel.dart';
+import 'open_auto_bridge_flutter_method_channel.dart';
 
-abstract class OpenautoflutterPlatform extends PlatformInterface {
-  /// Constructs a OpenautoflutterPlatform.
-  OpenautoflutterPlatform() : super(token: _token);
+abstract class OpenAutoBridgePlatform extends PlatformInterface {
+  /// Constructs a OpenAutoBridgePlatform.
+  OpenAutoBridgePlatform() : super(token: _token);
 
   static final Object _token = Object();
 
-  static OpenautoflutterPlatform _instance = MethodChannelOpenautoflutter();
+  static OpenAutoBridgePlatform _instance = MethodChannelOpenAutoBridge();
 
-  /// The default instance of [OpenautoflutterPlatform] to use.
+  /// The default instance of [OpenAutoBridgePlatform] to use.
   ///
-  /// Defaults to [MethodChannelOpenautoflutter].
-  static OpenautoflutterPlatform get instance => _instance;
+  /// Defaults to [MethodChannelOpenAutoBridge].
+  static OpenAutoBridgePlatform get instance => _instance;
 
   /// Platform-specific implementations should set this with their own
-  /// platform-specific class that extends [OpenautoflutterPlatform] when
+  /// platform-specific class that extends [OpenAutoBridgePlatform] when
   /// they register themselves.
-  static set instance(OpenautoflutterPlatform instance) {
+  static set instance(OpenAutoBridgePlatform instance) {
     PlatformInterface.verifyToken(instance, _token);
     _instance = instance;
   }

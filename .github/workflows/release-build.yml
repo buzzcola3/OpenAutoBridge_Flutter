@@ -11,7 +11,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: buzzcola3/openautoflutter-builder
+  IMAGE_NAME: buzzcola3/openautobridge-flutter-builder
 
 jobs:
   build-linux:
@@ -55,12 +55,12 @@ jobs:
       - name: Package bundle (${{ matrix.arch }})
         run: |
           mkdir -p dist
-          tar -C example/build/linux/${{ matrix.flutter_arch }}/release/bundle -czf dist/openautoflutter_example-linux-${{ matrix.arch }}.tar.gz .
+          tar -C example/build/linux/${{ matrix.flutter_arch }}/release/bundle -czf dist/open_auto_bridge_flutter_example-linux-${{ matrix.arch }}.tar.gz .
 
       - name: Upload release asset (${{ matrix.arch }})
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/openautoflutter_example-linux-${{ matrix.arch }}.tar.gz
+          files: dist/open_auto_bridge_flutter_example-linux-${{ matrix.arch }}.tar.gz
 
       - name: Build flutter-drm bundle (${{ matrix.arch }})
         run: |
@@ -73,19 +73,19 @@ jobs:
       - name: Package flutter-drm bundle (${{ matrix.arch }})
         run: |
           mkdir -p dist
-          tar -C dist/flutter-drm-${{ matrix.arch }} -czf dist/openautoflutter_example-flutter-drm-${{ matrix.arch }}.tar.gz .
+          tar -C dist/flutter-drm-${{ matrix.arch }} -czf dist/open_auto_bridge_flutter_example-flutter-drm-${{ matrix.arch }}.tar.gz .
 
       - name: Upload flutter-drm release asset (${{ matrix.arch }})
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/openautoflutter_example-flutter-drm-${{ matrix.arch }}.tar.gz
+          files: dist/open_auto_bridge_flutter_example-flutter-drm-${{ matrix.arch }}.tar.gz
 
       - name: Package flutter-drm debug-symbols bundle (${{ matrix.arch }})
         run: |
           mkdir -p dist
-          tar -C dist/flutter-drm-${{ matrix.arch }}-debug -czf dist/openautoflutter_example-flutter-drm-${{ matrix.arch }}-debug.tar.gz .
+          tar -C dist/flutter-drm-${{ matrix.arch }}-debug -czf dist/open_auto_bridge_flutter_example-flutter-drm-${{ matrix.arch }}-debug.tar.gz .
 
       - name: Upload flutter-drm debug-symbols asset (${{ matrix.arch }})
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/openautoflutter_example-flutter-drm-${{ matrix.arch }}-debug.tar.gz
+          files: dist/open_auto_bridge_flutter_example-flutter-drm-${{ matrix.arch }}-debug.tar.gz

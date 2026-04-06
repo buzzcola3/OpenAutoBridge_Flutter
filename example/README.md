@@ -1,6 +1,6 @@
-# openautoflutter_example
+# open_auto_bridge_flutter_example
 
-Demonstrates how to use the openautoflutter plugin.
+Demonstrates how to use the open_auto_bridge_flutter plugin.
 
 ## Getting Started
 

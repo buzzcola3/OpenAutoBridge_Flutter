@@ -1,14 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openautoflutter/openautoflutter.dart';
-import 'package:openautoflutter/openautoflutter_platform_interface.dart';
-import 'package:openautoflutter/openautoflutter_method_channel.dart';
+import 'package:open_auto_bridge_flutter/open_auto_bridge_flutter.dart';
+import 'package:open_auto_bridge_flutter/open_auto_bridge_flutter_platform_interface.dart';
+import 'package:open_auto_bridge_flutter/open_auto_bridge_flutter_method_channel.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
-class MockOpenautoflutterPlatform
+class MockOpenAutoBridgePlatform
     with MockPlatformInterfaceMixin
-    implements OpenautoflutterPlatform {
+    implements OpenAutoBridgePlatform {
 
   @override
   Future<String?> getPlatformVersion() => Future.value('42');
@@ -53,17 +53,17 @@ class MockOpenautoflutterPlatform
 }
 
 void main() {
-  final OpenautoflutterPlatform initialPlatform = OpenautoflutterPlatform.instance;
+  final OpenAutoBridgePlatform initialPlatform = OpenAutoBridgePlatform.instance;
 
-  test('$MethodChannelOpenautoflutter is the default instance', () {
-    expect(initialPlatform, isInstanceOf<MethodChannelOpenautoflutter>());
+  test('$MethodChannelOpenAutoBridge is the default instance', () {
+    expect(initialPlatform, isInstanceOf<MethodChannelOpenAutoBridge>());
   });
 
   test('getPlatformVersion', () async {
-    Openautoflutter openautoflutterPlugin = Openautoflutter();
-    MockOpenautoflutterPlatform fakePlatform = MockOpenautoflutterPlatform();
-    OpenautoflutterPlatform.instance = fakePlatform;
+    OpenAutoBridge open_auto_bridge_flutterPlugin = OpenAutoBridge();
+    MockOpenAutoBridgePlatform fakePlatform = MockOpenAutoBridgePlatform();
+    OpenAutoBridgePlatform.instance = fakePlatform;
 
-    expect(await openautoflutterPlugin.getPlatformVersion(), '42');
+    expect(await open_auto_bridge_flutterPlugin.getPlatformVersion(), '42');
   });
 }

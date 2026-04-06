@@ -1,12 +1,12 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openautoflutter/openautoflutter_method_channel.dart';
+import 'package:open_auto_bridge_flutter/open_auto_bridge_flutter_method_channel.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  MethodChannelOpenautoflutter platform = MethodChannelOpenautoflutter();
-  const MethodChannel channel = MethodChannel('openautoflutter');
+  MethodChannelOpenAutoBridge platform = MethodChannelOpenAutoBridge();
+  const MethodChannel channel = MethodChannel('open_auto_bridge_flutter');
   MethodCall? lastCall;
 
   setUp(() {

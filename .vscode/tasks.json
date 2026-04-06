@@ -12,7 +12,7 @@
     {
       "label": "docker: build builder image",
       "type": "shell",
-      "command": "sg docker -c 'docker build -t openautoflutter-builder .'",
+      "command": "sg docker -c 'docker build -t openautobridge-flutter-builder .'",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -21,7 +21,7 @@
     {
       "label": "docker: build builder image (arm64)",
       "type": "shell",
-      "command": "sg docker -c 'docker buildx build --platform linux/arm64 -t openautoflutter-builder-arm64 --load .'",
+      "command": "sg docker -c 'docker buildx build --platform linux/arm64 -t openautobridge-flutter-builder-arm64 --load .'",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -30,7 +30,7 @@
     {
       "label": "docker: flutter build linux (example)",
       "type": "shell",
-      "command": "sg docker -c 'docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder bash -c \"flutter pub get && flutter build linux\"'",
+      "command": "sg docker -c 'docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautobridge-flutter-builder bash -c \"flutter pub get && flutter build linux\"'",
       "dependsOn": "docker: build builder image",
       "group": {
         "kind": "build",
@@ -41,7 +41,7 @@
     {
       "label": "docker: flutter clean (example)",
       "type": "shell",
-      "command": "sg docker -c 'docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautoflutter-builder flutter clean'",
+      "command": "sg docker -c 'docker run --rm -t -v \"${workspaceFolder}:/workspace\" -w /workspace/example openautobridge-flutter-builder flutter clean'",
       "dependsOn": "docker: build builder image",
       "group": {
         "kind": "test",
@@ -52,7 +52,7 @@
     {
       "label": "docker: flutter build linux arm64 (example)",
       "type": "shell",
-      "command": "rm -f example/linux/flutter/ephemeral/.plugin_symlinks/openautoflutter && sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -v openautoflutter-arm64-pub-cache:/root/.pub-cache -v openautoflutter-arm64-ccache:/root/.ccache -w /workspace/example openautoflutter-builder-arm64 bash -c \"flutter pub get && flutter build linux\"' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/openautoflutter",
+      "command": "rm -f example/linux/flutter/ephemeral/.plugin_symlinks/open_auto_bridge_flutter && sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -v open_auto_bridge_flutter-arm64-pub-cache:/root/.pub-cache -v open_auto_bridge_flutter-arm64-ccache:/root/.ccache -w /workspace/example openautobridge-flutter-builder-arm64 bash -c \"flutter pub get && flutter build linux\"' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/open_auto_bridge_flutter",
       "dependsOn": "docker: build builder image (arm64)",
       "options": {
         "cwd": "${workspaceFolder}"
@@ -62,7 +62,7 @@
     {
       "label": "debuglantern: build debug bundle (arm64)",
       "type": "shell",
-      "command": "sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -v openautoflutter-arm64-pub-cache:/root/.pub-cache -v openautoflutter-arm64-ccache:/root/.ccache -w /workspace openautoflutter-builder-arm64 bash scripts/build_flutter_drm_release_arm64.sh example' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/openautoflutter",
+      "command": "sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -v open_auto_bridge_flutter-arm64-pub-cache:/root/.pub-cache -v open_auto_bridge_flutter-arm64-ccache:/root/.ccache -w /workspace openautobridge-flutter-builder-arm64 bash scripts/build_flutter_drm_release_arm64.sh example' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/open_auto_bridge_flutter",
       "dependsOn": "docker: build builder image (arm64)",
       "options": {
         "cwd": "${workspaceFolder}"
@@ -110,7 +110,7 @@
     {
       "label": "run example (x64)",
       "type": "shell",
-      "command": "${workspaceFolder}/example/build/linux/x64/release/bundle/openautoflutter_example",
+      "command": "${workspaceFolder}/example/build/linux/x64/release/bundle/open_auto_bridge_flutter_example",
       "options": {
         "cwd": "${workspaceFolder}/example/build/linux/x64/release/bundle",
         "env": {

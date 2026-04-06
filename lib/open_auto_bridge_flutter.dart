@@ -2,7 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'openautoflutter_platform_interface.dart';
+import 'open_auto_bridge_flutter_platform_interface.dart';
 
 /// Touch actions mirrored on native side.
 enum TouchAction {
@@ -30,13 +30,13 @@ extension TouchActionCode on TouchAction {
   }
 }
 
-class Openautoflutter {
+class OpenAutoBridge {
   Future<String?> getPlatformVersion() {
-    return OpenautoflutterPlatform.instance.getPlatformVersion();
+    return OpenAutoBridgePlatform.instance.getPlatformVersion();
   }
 
   Future<int?> getVideoTextureId() {
-    return OpenautoflutterPlatform.instance.getVideoTextureId();
+    return OpenAutoBridgePlatform.instance.getVideoTextureId();
   }
 
   Future<void> sendTouchEvent({
@@ -45,7 +45,7 @@ class Openautoflutter {
     required double y,
     required TouchAction action,
   }) {
-    return OpenautoflutterPlatform.instance.sendTouchEvent(
+    return OpenAutoBridgePlatform.instance.sendTouchEvent(
       pointerId: pointerId,
       x: x,
       y: y,
@@ -79,7 +79,7 @@ class Openautoflutter {
   /// Allowed values: unrestricted, no_video, no_keyboard_input,
   ///   no_voice_input, no_config, limit_message_len
   Future<void> sendSensorJson(String json) {
-    return OpenautoflutterPlatform.instance.sendSensorJson(json);
+    return OpenAutoBridgePlatform.instance.sendSensorJson(json);
   }
 
   /// Requests the current config from the core (side A) over transport.
@@ -90,7 +90,7 @@ class Openautoflutter {
   ///
   /// Returns the parsed JSON map, or `null` on timeout / error.
   Future<Map<String, dynamic>?> getConfig() {
-    return OpenautoflutterPlatform.instance.getConfig();
+    return OpenAutoBridgePlatform.instance.getConfig();
   }
 
   /// Replaces the running config on the core (side A).
@@ -103,7 +103,7 @@ class Openautoflutter {
   /// Fire-and-forget — there is no response.
   Future<void> sendConfigSet(Map<String, dynamic> config) {
     final request = jsonEncode({'action': 'set', 'config': config});
-    return OpenautoflutterPlatform.instance.sendConfigJson(request);
+    return OpenAutoBridgePlatform.instance.sendConfigJson(request);
   }
 
   /// Deletes the user overlay and reloads the shipped default on the
@@ -112,14 +112,14 @@ class Openautoflutter {
   /// Fire-and-forget — there is no response.
   Future<void> sendConfigReset() {
     final request = jsonEncode({'action': 'reset'});
-    return OpenautoflutterPlatform.instance.sendConfigJson(request);
+    return OpenAutoBridgePlatform.instance.sendConfigJson(request);
   }
 
   // ── Device control ──────────────────────────────────────────────────
 
   /// Stream of control messages from the core (e.g. device_list updates).
   Stream<Map<String, dynamic>> get onControlReceived {
-    return OpenautoflutterPlatform.instance.onControlReceived;
+    return OpenAutoBridgePlatform.instance.onControlReceived;
   }
 
   /// Requests the current list of available devices from the core.
@@ -128,7 +128,7 @@ class Openautoflutter {
   /// `{"action": "device_list", "devices": [...]}`.
   Future<void> requestDevices() {
     final request = jsonEncode({'action': 'get_devices'});
-    return OpenautoflutterPlatform.instance.sendControlJson(request);
+    return OpenAutoBridgePlatform.instance.sendControlJson(request);
   }
 
   /// Tells the core to connect to the device with the given [id].
@@ -138,7 +138,7 @@ class Openautoflutter {
   /// an updated device_list.
   Future<void> connectDevice(String id) {
     final request = jsonEncode({'action': 'connect_device', 'id': id});
-    return OpenautoflutterPlatform.instance.sendControlJson(request);
+    return OpenAutoBridgePlatform.instance.sendControlJson(request);
   }
 
   /// Tells the core to disconnect the device with the given [id].
@@ -147,6 +147,6 @@ class Openautoflutter {
   /// "available", then broadcasts an updated device_list.
   Future<void> disconnectDevice(String id) {
     final request = jsonEncode({'action': 'disconnect_device', 'id': id});
-    return OpenautoflutterPlatform.instance.sendControlJson(request);
+    return OpenAutoBridgePlatform.instance.sendControlJson(request);
   }
 }

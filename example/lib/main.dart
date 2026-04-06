@@ -3,7 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
-import 'package:openautoflutter/openautoflutter.dart';
+import 'package:open_auto_bridge_flutter/open_auto_bridge_flutter.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,7 +18,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   String _platformVersion = 'Unknown';
-  final _openautoflutterPlugin = Openautoflutter();
+  final _openAutoBridgePlugin = OpenAutoBridge();
   int? _videoTextureId;
   final Set<int> _activePointers = <int>{};
   Size? _textureSize;
@@ -37,8 +37,8 @@ class _MyAppState extends State<MyApp> {
     // We also handle the message potentially returning null.
     try {
       platformVersion =
-          await _openautoflutterPlugin.getPlatformVersion() ?? 'Unknown platform version';
-  textureId = await _openautoflutterPlugin.getVideoTextureId();
+          await _openAutoBridgePlugin.getPlatformVersion() ?? 'Unknown platform version';
+  textureId = await _openAutoBridgePlugin.getVideoTextureId();
     } on PlatformException {
       platformVersion = 'Failed to get platform version.';
   textureId = null;
@@ -62,7 +62,7 @@ class _MyAppState extends State<MyApp> {
     final double xNorm = (event.localPosition.dx / size.width).clamp(0.0, 1.0);
     final double yNorm = (event.localPosition.dy / size.height).clamp(0.0, 1.0);
 
-    _openautoflutterPlugin.sendTouchEvent(
+    _openAutoBridgePlugin.sendTouchEvent(
       pointerId: event.pointer,
       x: xNorm,
       y: yNorm,
@@ -81,7 +81,7 @@ class _MyAppState extends State<MyApp> {
         'bearing_deg': 90.0,
       },
     });
-    await _openautoflutterPlugin.sendSensorJson(payload);
+    await _openAutoBridgePlugin.sendSensorJson(payload);
   }
 
   Future<void> _sendNightModeSample() async {
@@ -90,7 +90,7 @@ class _MyAppState extends State<MyApp> {
         'enabled': true,
       },
     });
-    await _openautoflutterPlugin.sendSensorJson(payload);
+    await _openAutoBridgePlugin.sendSensorJson(payload);
   }
 
   Future<void> _sendDrivingStatusSample() async {
@@ -99,7 +99,7 @@ class _MyAppState extends State<MyApp> {
         'status': 'no_video',
       },
     });
-    await _openautoflutterPlugin.sendSensorJson(payload);
+    await _openAutoBridgePlugin.sendSensorJson(payload);
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -128,7 +128,7 @@ class _MyAppState extends State<MyApp> {
   void _openConfigPage() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ConfigPage(plugin: _openautoflutterPlugin),
+        builder: (_) => ConfigPage(plugin: _openAutoBridgePlugin),
       ),
     );
   }
@@ -148,7 +148,7 @@ class _MyAppState extends State<MyApp> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => DevicesPage(plugin: _openautoflutterPlugin),
+                        builder: (_) => DevicesPage(plugin: _openAutoBridgePlugin),
                       ),
                     );
                   },
@@ -159,7 +159,7 @@ class _MyAppState extends State<MyApp> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => ConfigPage(plugin: _openautoflutterPlugin),
+                        builder: (_) => ConfigPage(plugin: _openAutoBridgePlugin),
                       ),
                     );
                   },
@@ -245,7 +245,7 @@ class _MyAppState extends State<MyApp> {
 
 class ConfigPage extends StatefulWidget {
   const ConfigPage({super.key, required this.plugin});
-  final Openautoflutter plugin;
+  final OpenAutoBridge plugin;
 
   @override
   State<ConfigPage> createState() => _ConfigPageState();
@@ -564,7 +564,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
 class DevicesPage extends StatefulWidget {
   const DevicesPage({super.key, required this.plugin});
-  final Openautoflutter plugin;
+  final OpenAutoBridge plugin;
 
   @override
   State<DevicesPage> createState() => _DevicesPageState();

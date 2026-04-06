@@ -1,4 +1,4 @@
-# openautoflutter
+# open_auto_bridge_flutter
 
 A new Flutter plugin project.
 
@@ -7,7 +7,7 @@ A new Flutter plugin project.
 Build an isolated Linux toolchain with Flutter, clang-18, and libc++ using the provided `Dockerfile`:
 
 ```
-docker build -t openautoflutter-builder .
+docker build -t openautobridge-flutter-builder .
 ```
 
 Run builds inside the container while mounting the workspace (example builds the example app for Linux):
@@ -16,7 +16,7 @@ Run builds inside the container while mounting the workspace (example builds the
 docker run --rm -it \
 	-v "$PWD:/workspace" \
 	-w /workspace/example \
-	openautoflutter-builder \
+	openautobridge-flutter-builder \
 	flutter build linux -v
 ```
 
@@ -28,7 +28,7 @@ Two workflows automate builds:
 
 ### Builder Image (`docker-image.yml`)
 
-Builds and pushes the Docker builder image to GitHub Container Registry (`ghcr.io/buzzcola3/openautoflutter-builder`). It runs automatically when `Dockerfile` or the workflow file itself changes on `main`, and can also be triggered manually from the Actions tab.
+Builds and pushes the Docker builder image to GitHub Container Registry (`ghcr.io/buzzcola3/openautobridge-flutter-builder`). It runs automatically when `Dockerfile` or the workflow file itself changes on `main`, and can also be triggered manually from the Actions tab.
 
 - Produces two platform tags: `amd64` and `arm64`
 - Each architecture builds natively on its own runner (no QEMU emulation)

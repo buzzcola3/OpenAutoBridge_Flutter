@@ -1,6 +1,6 @@
 #include <flutter_linux/flutter_linux.h>
 
-#include "include/openautoflutter/openautoflutter_plugin.h"
+#include "include/open_auto_bridge_flutter/open_auto_bridge_flutter_plugin.h"
 
 // This file exposes some plugin internals for unit testing. See
 // https://github.com/flutter/flutter/issues/88724 for current limitations

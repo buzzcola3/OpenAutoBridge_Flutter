@@ -10,13 +10,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:openautoflutter/openautoflutter.dart';
+import 'package:open_auto_bridge_flutter/open_auto_bridge_flutter.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('getPlatformVersion test', (WidgetTester tester) async {
-    final Openautoflutter plugin = Openautoflutter();
+    final OpenAutoBridge plugin = OpenAutoBridge();
     final String? version = await plugin.getPlatformVersion();
     // The version string depends on the host platform running the test, so
     // just assert that some non-empty string is returned.

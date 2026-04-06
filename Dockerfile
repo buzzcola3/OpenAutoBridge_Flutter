@@ -1,4 +1,4 @@
-# Minimal reproducible builder for OpenAutoFlutter on Linux
+# Minimal reproducible builder for OpenAutoBridge Flutter on Linux
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive

@@ -1,4 +1,4 @@
-name: openautoflutter
+name: open_auto_bridge_flutter
 description: "A new Flutter plugin project."
 version: 0.0.1
 homepage:
@@ -35,7 +35,7 @@ flutter:
   plugin:
     platforms:
       linux:
-        pluginClass: OpenautoflutterPlugin
+        pluginClass: OpenAutoBridgeFlutterPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

@@ -7,10 +7,10 @@ project(runner LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "openautoflutter_example")
+set(BINARY_NAME "open_auto_bridge_flutter_example")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "buzz.buzzcola3.openautoflutter")
+set(APPLICATION_ID "buzz.buzzcola3.open_auto_bridge_flutter")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -76,7 +76,7 @@ set_target_properties(${BINARY_NAME}
 )
 
 # Disable plugin unit tests in example builds to avoid pulling gtest when not needed.
-set(include_openautoflutter_tests FALSE)
+set(include_open_auto_bridge_flutter_tests FALSE)
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.

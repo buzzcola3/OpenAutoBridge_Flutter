@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug openautoflutter_example (gdb)",
+      "name": "Debug open_auto_bridge_flutter_example (gdb)",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/example/build/linux/x64/release/bundle/openautoflutter_example",
+      "program": "${workspaceFolder}/example/build/linux/x64/release/bundle/open_auto_bridge_flutter_example",
       "args": [],
       "cwd": "${workspaceFolder}/example/build/linux/x64/release/bundle",
       "environment": [
