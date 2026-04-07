@@ -122,18 +122,7 @@ void OAAudioPlayer::checkCatchUp() {
   // Must be called with mutex_ held.
   if (!pipeline_ || !scaletempo_) return;
 
-  // Query how much data is queued in the pipeline
-  gint64 position = 0, duration_queued = 0;
-  GstQuery* query = gst_query_new_latency();
-  if (gst_element_query(pipeline_, query)) {
-    gboolean live;
-    GstClockTime min_lat, max_lat;
-    gst_query_parse_latency(query, &live, &min_lat, &max_lat);
-    duration_queued = static_cast<gint64>(min_lat);
-  }
-  gst_query_unref(query);
-
-  // Use appsrc current-level-bytes as a simpler heuristic
+  // Use appsrc current-level-bytes as a heuristic for queue depth
   guint64 queued_bytes = 0;
   g_object_get(appsrc_, "current-level-bytes", &queued_bytes, nullptr);
   const int bytes_per_sample = (cfg_.bits_per_sample / 8) * cfg_.channels;
