@@ -150,6 +150,17 @@ class _MyAppState extends State<MyApp> {
               title: const Text('Plugin example app'),
               actions: [
                 IconButton(
+                  icon: const Icon(Icons.volume_up),
+                  tooltip: 'Audio',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AudioPage(plugin: _openAutoBridgePlugin),
+                      ),
+                    );
+                  },
+                ),
+                IconButton(
                   icon: const Icon(Icons.usb),
                   tooltip: 'Devices',
                   onPressed: () {
@@ -545,6 +556,140 @@ class _ConfigPageState extends State<ConfigPage> {
             .textTheme
             .titleMedium
             ?.copyWith(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Audio page
+// ---------------------------------------------------------------------------
+
+class AudioPage extends StatefulWidget {
+  const AudioPage({super.key, required this.plugin});
+  final OpenAutoBridge plugin;
+
+  @override
+  State<AudioPage> createState() => _AudioPageState();
+}
+
+class _AudioPageState extends State<AudioPage> {
+  late int _mediaVol;
+  late int _guidanceVol;
+  late int _systemVol;
+  List<AudioDeviceInfo> _devices = [];
+  String _selectedDevice = '';
+  bool _loadingDevices = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _mediaVol = widget.plugin.audio.media.volume;
+    _guidanceVol = widget.plugin.audio.guidance.volume;
+    _systemVol = widget.plugin.audio.system.volume;
+    _selectedDevice = widget.plugin.config.audio.device;
+    _loadDevices();
+  }
+
+  Future<void> _loadDevices() async {
+    final devices = await widget.plugin.audio.devices;
+    if (!mounted) return;
+    setState(() {
+      _devices = devices;
+      _loadingDevices = false;
+    });
+  }
+
+  void _setVolume(AudioChannelHandle channel, int value) {
+    channel.volume = value;
+    setState(() {
+      _mediaVol = widget.plugin.audio.media.volume;
+      _guidanceVol = widget.plugin.audio.guidance.volume;
+      _systemVol = widget.plugin.audio.system.volume;
+    });
+  }
+
+  void _setDevice(String device) {
+    widget.plugin.config.audio.device = device;
+    setState(() => _selectedDevice = device);
+  }
+
+  Widget _volumeSlider(String label, int value, AudioChannelHandle channel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('$label: $value%'),
+        Slider(
+          value: value.toDouble(),
+          min: 0,
+          max: 100,
+          divisions: 20,
+          label: '$value',
+          onChanged: (v) => _setVolume(channel, v.round()),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Audio'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh devices',
+            onPressed: () {
+              setState(() => _loadingDevices = true);
+              _loadDevices();
+            },
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('Volume',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          _volumeSlider('Media', _mediaVol, widget.plugin.audio.media),
+          _volumeSlider('Guidance', _guidanceVol, widget.plugin.audio.guidance),
+          _volumeSlider('System', _systemVol, widget.plugin.audio.system),
+          const Divider(height: 32),
+          Text('Output Device',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          if (_loadingDevices)
+            const Center(child: CircularProgressIndicator())
+          else if (_devices.isEmpty)
+            const Text('No audio devices found')
+          else
+            DropdownButtonFormField<String>(
+              value: _devices.any((d) => d.name == _selectedDevice)
+                  ? _selectedDevice
+                  : '',
+              decoration:
+                  const InputDecoration(labelText: 'Audio output'),
+              items: [
+                const DropdownMenuItem(
+                  value: '',
+                  child: Text('Default'),
+                ),
+                ..._devices.map((d) => DropdownMenuItem(
+                      value: d.name,
+                      child: Text(d.displayName),
+                    )),
+              ],
+              onChanged: (v) => _setDevice(v ?? ''),
+            ),
+        ],
       ),
     );
   }

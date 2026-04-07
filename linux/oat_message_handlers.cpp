@@ -311,16 +311,12 @@ void OatMessageHandlers::handleAudio(buzz::wire::MsgType type, uint64_t ts,
     if (!data || size == 0) return;
     switch (type) {
         case buzz::wire::MsgType::MEDIA_AUDIO:
-            if (media_audio_)   media_audio_->push(data, size, ts);
-            break;
+            if (media_audio_)   media_audio_->push(data, size, ts); break;
         case buzz::wire::MsgType::GUIDANCE_AUDIO:
-            if (guidance_audio_) guidance_audio_->push(data, size, ts);
-            break;
+            if (guidance_audio_) guidance_audio_->push(data, size, ts); break;
         case buzz::wire::MsgType::SYSTEM_AUDIO:
-            if (system_audio_)  system_audio_->push(data, size, ts);
-            break;
-        default:
-            break;
+            if (system_audio_)  system_audio_->push(data, size, ts); break;
+        default: break;
     }
 }
 
