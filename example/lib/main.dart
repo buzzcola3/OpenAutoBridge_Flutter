@@ -29,6 +29,32 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     initPlatformState();
+    _initSensors();
+  }
+
+  Future<void> _initSensors() async {
+    // Enable sensors + cyclic resend
+    _openAutoBridgePlugin.config.sensors.nightMode
+      ..enabled = true
+      ..cyclic = true
+      ..cyclicTime = 5000;
+    _openAutoBridgePlugin.config.sensors.drivingStatus
+      ..enabled = true
+      ..cyclic = true
+      ..cyclicTime = 5000;
+
+    // Push sensor config to core
+    await _openAutoBridgePlugin.config.apply();
+
+    // Set initial sensor values
+    _openAutoBridgePlugin.sensor.nightMode.set({'enabled': false});
+    _openAutoBridgePlugin.sensor.drivingStatus.set({'status': 'no_video'});
+  }
+
+  @override
+  void dispose() {
+    _openAutoBridgePlugin.dispose();
+    super.dispose();
   }
 
   // Platform messages are asynchronous, so we initialize in an async method.
@@ -74,38 +100,6 @@ class _MyAppState extends State<MyApp> {
       y: yNorm,
       action: action,
     );
-  }
-
-  Future<void> _sendSensorSample() async {
-    final payload = jsonEncode({
-      'location': {
-        'latitude': 37.7749,
-        'longitude': -122.4194,
-        'accuracy_m': 5.0,
-        'altitude_m': 15.0,
-        'speed_mps': 13.4,
-        'bearing_deg': 90.0,
-      },
-    });
-    await _openAutoBridgePlugin.sendSensorJson(payload);
-  }
-
-  Future<void> _sendNightModeSample() async {
-    final payload = jsonEncode({
-      'night_mode': {
-        'enabled': true,
-      },
-    });
-    await _openAutoBridgePlugin.sendSensorJson(payload);
-  }
-
-  Future<void> _sendDrivingStatusSample() async {
-    final payload = jsonEncode({
-      'driving_status': {
-        'status': 'no_video',
-      },
-    });
-    await _openAutoBridgePlugin.sendSensorJson(payload);
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -192,21 +186,6 @@ class _MyAppState extends State<MyApp> {
                       const Text('Texture not available')
                     else ...[
                       Text('Texture ID: $_videoTextureId'),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: _sendSensorSample,
-                        child: const Text('Send sensor JSON'),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: _sendNightModeSample,
-                        child: const Text('Send night mode JSON'),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: _sendDrivingStatusSample,
-                        child: const Text('Send driving status JSON'),
-                      ),
                       const SizedBox(height: 8),
                       // Render the native GL video texture with flex to avoid overflow.
                       Flexible(

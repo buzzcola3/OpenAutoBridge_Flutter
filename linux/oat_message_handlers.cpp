@@ -135,6 +135,11 @@ OatMessageHandlers::OatMessageHandlers(NativeTransport& transport,
         }
     });
     decoder_.start();
+
+    // Create audio players for each channel
+    media_audio_   = std::make_unique<OAAudioPlayer>(OAAudioPlayer::Config{48000, 2, 16});
+    guidance_audio_ = std::make_unique<OAAudioPlayer>(OAAudioPlayer::Config{16000, 1, 16});
+    system_audio_  = std::make_unique<OAAudioPlayer>(OAAudioPlayer::Config{16000, 1, 16});
 }
 
 std::string OatMessageHandlers::hexHead(const uint8_t* data, std::size_t size, std::size_t max_bytes) {
@@ -173,6 +178,20 @@ void OatMessageHandlers::install() {
                 handleControlResponse(ts, data, size);
             });
 
+    transport_.addTypeHandler(buzz::wire::MsgType::MEDIA_AUDIO,
+            [this](uint64_t ts, const void* data, std::size_t size) {
+                handleAudio(buzz::wire::MsgType::MEDIA_AUDIO, ts, data, size);
+            });
+
+    transport_.addTypeHandler(buzz::wire::MsgType::GUIDANCE_AUDIO,
+            [this](uint64_t ts, const void* data, std::size_t size) {
+                handleAudio(buzz::wire::MsgType::GUIDANCE_AUDIO, ts, data, size);
+            });
+
+    transport_.addTypeHandler(buzz::wire::MsgType::SYSTEM_AUDIO,
+            [this](uint64_t ts, const void* data, std::size_t size) {
+                handleAudio(buzz::wire::MsgType::SYSTEM_AUDIO, ts, data, size);
+            });
 }
 
 bool OatMessageHandlers::handleTouchMethod(FlValue* args, std::string& error) {
@@ -283,4 +302,76 @@ void OatMessageHandlers::handleControlResponse(uint64_t /*envelope_ts*/,
     auto* cb = new ChannelCbData{channel_, "onControlReceived",
                                  std::string(static_cast<const char*>(data), size)};
     g_idle_add(channel_invoke_idle_cb, cb);
+}
+
+// --- Audio handling -------------------------------------------------------
+
+void OatMessageHandlers::handleAudio(buzz::wire::MsgType type, uint64_t ts,
+                                     const void* data, std::size_t size) {
+    if (!data || size == 0) return;
+    switch (type) {
+        case buzz::wire::MsgType::MEDIA_AUDIO:
+            if (media_audio_)   media_audio_->push(data, size, ts);
+            break;
+        case buzz::wire::MsgType::GUIDANCE_AUDIO:
+            if (guidance_audio_) guidance_audio_->push(data, size, ts);
+            break;
+        case buzz::wire::MsgType::SYSTEM_AUDIO:
+            if (system_audio_)  system_audio_->push(data, size, ts);
+            break;
+        default:
+            break;
+    }
+}
+
+bool OatMessageHandlers::handleAudioVolumeMethod(FlValue* args, std::string& error) {
+    if (!args || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+        error = "Args must be a map";
+        return false;
+    }
+
+    FlValue* ch_val = fl_value_lookup_string(args, "channel");
+    FlValue* vol_val = fl_value_lookup_string(args, "volume");
+    if (!ch_val || fl_value_get_type(ch_val) != FL_VALUE_TYPE_STRING) {
+        error = "Missing or invalid channel";
+        return false;
+    }
+    bool ok = false;
+    const int vol = static_cast<int>(get_number(vol_val, ok));
+    if (!ok) {
+        error = "Missing or invalid volume";
+        return false;
+    }
+
+    const std::string channel = fl_value_get_string(ch_val);
+    if (channel == "media" && media_audio_) {
+        media_audio_->setVolume(vol);
+    } else if (channel == "guidance" && guidance_audio_) {
+        guidance_audio_->setVolume(vol);
+    } else if (channel == "system" && system_audio_) {
+        system_audio_->setVolume(vol);
+    } else {
+        error = "Unknown audio channel: " + channel;
+        return false;
+    }
+    return true;
+}
+
+bool OatMessageHandlers::handleAudioDeviceMethod(FlValue* args, std::string& error) {
+    if (!args || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+        error = "Args must be a map";
+        return false;
+    }
+
+    FlValue* dev_val = fl_value_lookup_string(args, "device");
+    if (!dev_val || fl_value_get_type(dev_val) != FL_VALUE_TYPE_STRING) {
+        error = "Missing or invalid device";
+        return false;
+    }
+    const std::string device = fl_value_get_string(dev_val);
+
+    if (media_audio_)   media_audio_->setDevice(device);
+    if (guidance_audio_) guidance_audio_->setDevice(device);
+    if (system_audio_)  system_audio_->setDevice(device);
+    return true;
 }

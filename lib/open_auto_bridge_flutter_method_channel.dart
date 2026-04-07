@@ -103,4 +103,29 @@ class MethodChannelOpenAutoBridge extends OpenAutoBridgePlatform {
     _ensureHandler();
     return _controlController.stream;
   }
+
+  @override
+  Future<void> setAudioVolume(String channel, int volume) async {
+    await methodChannel.invokeMethod<void>('setAudioVolume', <String, dynamic>{
+      'channel': channel,
+      'volume': volume,
+    });
+  }
+
+  @override
+  Future<void> setAudioDevice(String device) async {
+    await methodChannel.invokeMethod<void>('setAudioDevice', <String, dynamic>{
+      'device': device,
+    });
+  }
+
+  @override
+  Future<List<Map<String, String>>> getAudioDevices() async {
+    final result = await methodChannel.invokeMethod<List<dynamic>>('getAudioDevices');
+    if (result == null) return [];
+    return result.map((e) {
+      final map = Map<String, dynamic>.from(e as Map);
+      return map.map((k, v) => MapEntry(k, v.toString()));
+    }).toList();
+  }
 }

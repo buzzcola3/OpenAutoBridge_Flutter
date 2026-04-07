@@ -24,6 +24,7 @@ list(APPEND PLUGIN_SOURCES
   "oat_message_handlers.cpp"
   "av/oa_video_texture.cc"
   "av/h264_decoder_gst.cc"
+  "av/oa_audio_player.cc"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
@@ -127,7 +128,7 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE ${CMAKE_DL_LIBS})
 target_link_libraries(${PLUGIN_NAME} PRIVATE c++ c++abi)
 
 # GStreamer for H264 decoding (v4l2slh264dec HW or software fallback)
-pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 gstreamer-allocators-1.0)
+pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 gstreamer-allocators-1.0 gstreamer-audio-1.0)
 target_include_directories(${PLUGIN_NAME} PRIVATE ${GST_INCLUDE_DIRS})
 target_link_libraries(${PLUGIN_NAME} PRIVATE ${GST_LIBRARIES})
 

@@ -20,6 +20,8 @@
 #include <vector>
 #include <string>
 
+#include <gst/gst.h>
+
 using NativeTransport = buzz::autoapp::Transport::Transport;
 
 #include "open_auto_bridge_flutter_plugin_private.h"
@@ -94,6 +96,64 @@ static void open_auto_bridge_flutter_plugin_handle_method_call(
     } else {
       response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
     }
+  } else if (strcmp(method, "setAudioVolume") == 0) {
+    std::string error;
+    if (!self->handlers) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("not_ready", "Handlers not initialized", nullptr));
+    } else if (!self->handlers->handleAudioVolumeMethod(fl_method_call_get_args(method_call), error)) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("invalid_args", error.c_str(), nullptr));
+    } else {
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+    }
+  } else if (strcmp(method, "setAudioDevice") == 0) {
+    std::string error;
+    if (!self->handlers) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("not_ready", "Handlers not initialized", nullptr));
+    } else if (!self->handlers->handleAudioDeviceMethod(fl_method_call_get_args(method_call), error)) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("invalid_args", error.c_str(), nullptr));
+    } else {
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+    }
+  } else if (strcmp(method, "getAudioDevices") == 0) {
+    // Enumerate audio output devices via GstDeviceMonitor
+    GstDeviceMonitor* monitor = gst_device_monitor_new();
+    GstCaps* caps = gst_caps_new_empty_simple("audio/x-raw");
+    gst_device_monitor_add_filter(monitor, "Audio/Sink", caps);
+    gst_caps_unref(caps);
+
+    g_autoptr(FlValue) list = fl_value_new_list();
+
+    GList* devices = gst_device_monitor_get_devices(monitor);
+    for (GList* it = devices; it != nullptr; it = it->next) {
+      GstDevice* dev = GST_DEVICE(it->data);
+      gchar* name = gst_device_get_display_name(dev);
+      GstStructure* props = gst_device_get_properties(dev);
+
+      const gchar* device_name = nullptr;
+      if (props) {
+        // Try common property keys for the internal device name
+        device_name = gst_structure_get_string(props, "node.name");
+        if (!device_name)
+          device_name = gst_structure_get_string(props, "device.name");
+        if (!device_name)
+          device_name = gst_structure_get_string(props, "alsa.device");
+      }
+
+      g_autoptr(FlValue) entry = fl_value_new_map();
+      fl_value_set_string_take(entry, "name",
+          fl_value_new_string(device_name ? device_name : (name ? name : "")));
+      fl_value_set_string_take(entry, "display_name",
+          fl_value_new_string(name ? name : ""));
+      fl_value_append(list, entry);
+
+      if (props) gst_structure_free(props);
+      g_free(name);
+      gst_object_unref(dev);
+    }
+    g_list_free(devices);
+    gst_object_unref(monitor);
+
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(list));
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }

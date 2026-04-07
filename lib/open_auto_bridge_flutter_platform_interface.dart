@@ -60,4 +60,16 @@ abstract class OpenAutoBridgePlatform extends PlatformInterface {
   Stream<Map<String, dynamic>> get onControlReceived {
     throw UnimplementedError('onControlReceived has not been implemented.');
   }
+
+  Future<void> setAudioVolume(String channel, int volume) {
+    throw UnimplementedError('setAudioVolume() has not been implemented.');
+  }
+
+  Future<void> setAudioDevice(String device) {
+    throw UnimplementedError('setAudioDevice() has not been implemented.');
+  }
+
+  Future<List<Map<String, String>>> getAudioDevices() {
+    throw UnimplementedError('getAudioDevices() has not been implemented.');
+  }
 }
