@@ -21,6 +21,8 @@ class _MyAppState extends State<MyApp> {
   final _openAutoBridgePlugin = OpenAutoBridge();
   int? _videoTextureId;
   final Set<int> _activePointers = <int>{};
+  final Map<int, int> _pointerIdMap = {}; // Flutter pointer → sequential ID
+  int _nextPointerId = 0;
   Size? _textureSize;
 
   @override
@@ -55,6 +57,10 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  int _mapPointerId(int flutterPointer) {
+    return _pointerIdMap.putIfAbsent(flutterPointer, () => _nextPointerId++);
+  }
+
   void _sendTouch(PointerEvent event, TouchAction action) {
     final size = _textureSize;
     if (size == null || size.width == 0 || size.height == 0) return;
@@ -63,7 +69,7 @@ class _MyAppState extends State<MyApp> {
     final double yNorm = (event.localPosition.dy / size.height).clamp(0.0, 1.0);
 
     _openAutoBridgePlugin.sendTouchEvent(
-      pointerId: event.pointer,
+      pointerId: _mapPointerId(event.pointer),
       x: xNorm,
       y: yNorm,
       action: action,
@@ -117,12 +123,19 @@ class _MyAppState extends State<MyApp> {
     final bool isLast = _activePointers.length <= 1;
     _sendTouch(event, isLast ? TouchAction.up : TouchAction.pointerUp);
     _activePointers.remove(event.pointer);
+    _pointerIdMap.remove(event.pointer);
+    if (_activePointers.isEmpty) {
+      _pointerIdMap.clear();
+      _nextPointerId = 0;
+    }
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
-    final bool isLast = _activePointers.length <= 1;
-    _sendTouch(event, isLast ? TouchAction.up : TouchAction.pointerUp);
-    _activePointers.remove(event.pointer);
+    // Treat cancel as all fingers lifted
+    _sendTouch(event, TouchAction.up);
+    _activePointers.clear();
+    _pointerIdMap.clear();
+    _nextPointerId = 0;
   }
 
   void _openConfigPage() {
