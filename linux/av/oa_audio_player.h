@@ -50,4 +50,8 @@ private:
   int64_t jitter_avg_us_ = 0;
   static constexpr int64_t kQueueMinUs =    10'000;   // 10 ms
   static constexpr int64_t kQueueMaxUs = 1'000'000;   // 1000 ms
+
+  int bytesPerMs() const {
+    return (cfg_.bits_per_sample / 8) * cfg_.channels * cfg_.sample_rate / 1000;
+  }
 };

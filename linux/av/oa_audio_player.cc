@@ -42,14 +42,17 @@ void OAAudioPlayer::buildPipeline() {
                "caps",         caps,
                "format",       GST_FORMAT_TIME,
                "is-live",      TRUE,
-               "do-timestamp", TRUE,
+               "do-timestamp", FALSE,
                nullptr);
   gst_caps_unref(caps);
 
+  // Size queue in bytes — bytes directly map to audio duration regardless
+  // of PTS timestamps, which are unreliable with bursty arrivals.
+  const int bpm = bytesPerMs();
   g_object_set(queue_,
-               "max-size-time",    (guint64)(500 * GST_MSECOND),
+               "max-size-time",    (guint64)0,
                "max-size-buffers", 0,
-               "max-size-bytes",   0,
+               "max-size-bytes",   (guint)(500 * bpm),  // 500 ms
                nullptr);
 
   g_object_set(volume_el_, "volume",
@@ -87,13 +90,13 @@ void OAAudioPlayer::push(const void* data, std::size_t size, uint64_t /*timestam
   std::lock_guard<std::mutex> lock(mutex_);
   if (!appsrc_ || !data || size == 0) return;
 
-  // Adapt queue size based on arrival jitter
+  // Adapt queue size in bytes based on arrival jitter
   int64_t now_us = g_get_monotonic_time();
   if (last_push_us_ > 0) {
     int64_t delta = now_us - last_push_us_;
     jitter_avg_us_ += (delta - jitter_avg_us_) / 16;  // EMA α=1/16
-    int64_t target_us = std::clamp(jitter_avg_us_ * 4, kQueueMinUs, kQueueMaxUs);
-    g_object_set(queue_, "max-size-time", (guint64)(target_us * 1000), nullptr);
+    int64_t target_ms = std::clamp(jitter_avg_us_ * 4 / 1000, kQueueMinUs / 1000, kQueueMaxUs / 1000);
+    g_object_set(queue_, "max-size-bytes", (guint)(target_ms * bytesPerMs()), nullptr);
   }
   last_push_us_ = now_us;
 
