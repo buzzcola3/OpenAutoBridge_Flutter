@@ -289,36 +289,58 @@ class AudioConfig {
 /// Modify [sensors] properties, then call [apply] to push the updated
 /// service-discovery response to OpenAutoCore.
 class OpenAutoConfig {
-  final SensorsConfig sensors;
+  late final SensorsConfig sensors;
   final AudioConfig audio = AudioConfig();
 
   // Top-level fields
-  String displayName = 'OpenAutoCore';
-  String driverPosition = 'DRIVER_POSITION_RIGHT';
-  bool canPlayNativeMediaDuringVr = false;
-  bool probeForSupport = false;
+  String displayName;
+  String driverPosition;
+  bool canPlayNativeMediaDuringVr;
+  bool probeForSupport;
 
   // Video (channel 3)
-  String videoCodecResolution = 'VIDEO_800x480';
-  String videoFrameRate = 'VIDEO_FPS_30';
-  int videoDensity = 140;
+  String videoCodecResolution;
+  String videoFrameRate;
+  int videoDensity;
 
   // Touch (channel 8) — matches video resolution by default.
-  int touchWidth = 800;
-  int touchHeight = 480;
+  int touchWidth;
+  int touchHeight;
 
   // Headunit info
-  String huMake = 'blank';
-  String huModel = 'blank';
-  String huYear = 'blank';
-  String huVehicleId = 'blank';
-  String huHeadUnitMake = 'blank';
-  String huHeadUnitModel = 'blank';
-  String huSoftwareBuild = '1';
-  String huSoftwareVersion = '1.0';
+  String headunitMake;
+  String headunitModel;
+  String headunitYear;
+  String headunitVehicleId;
+  String headunitHeadUnitMake;
+  String headunitHeadUnitModel;
+  String headunitSoftwareBuild;
+  String headunitSoftwareVersion;
 
-  OpenAutoConfig._(Map<SensorType, _SensorState> states)
-      : sensors = SensorsConfig._(states);
+  OpenAutoConfig({
+    this.displayName = 'OpenAutoCore',
+    this.driverPosition = 'DRIVER_POSITION_RIGHT',
+    this.canPlayNativeMediaDuringVr = false,
+    this.probeForSupport = false,
+    this.videoCodecResolution = 'VIDEO_800x480',
+    this.videoFrameRate = 'VIDEO_FPS_30',
+    this.videoDensity = 140,
+    this.touchWidth = 800,
+    this.touchHeight = 480,
+    this.headunitMake = 'blank',
+    this.headunitModel = 'blank',
+    this.headunitYear = 'blank',
+    this.headunitVehicleId = 'blank',
+    this.headunitHeadUnitMake = 'blank',
+    this.headunitHeadUnitModel = 'blank',
+    this.headunitSoftwareBuild = '1',
+    this.headunitSoftwareVersion = '1.0',
+  });
+
+  /// Internal: wires up sensor states after construction.
+  void _attachSensors(Map<SensorType, _SensorState> states) {
+    sensors = SensorsConfig._(states);
+  }
 
   /// Builds the full service-discovery config map.
   ///
@@ -440,14 +462,14 @@ class OpenAutoConfig {
         },
       },
       'headunit_info': {
-        'make': huMake,
-        'model': huModel,
-        'year': huYear,
-        'vehicle_id': huVehicleId,
-        'head_unit_make': huHeadUnitMake,
-        'head_unit_model': huHeadUnitModel,
-        'head_unit_software_build': huSoftwareBuild,
-        'head_unit_software_version': huSoftwareVersion,
+        'make': headunitMake,
+        'model': headunitModel,
+        'year': headunitYear,
+        'vehicle_id': headunitVehicleId,
+        'head_unit_make': headunitHeadUnitMake,
+        'head_unit_model': headunitHeadUnitModel,
+        'head_unit_software_build': headunitSoftwareBuild,
+        'head_unit_software_version': headunitSoftwareVersion,
       },
     };
   }
@@ -509,8 +531,8 @@ class SensorManager {
 class OpenAutoBridge {
   late final Map<SensorType, _SensorState> _sensorStates;
 
-  /// Sensor configuration (enabled / cyclic / cyclicTime per sensor).
-  late final OpenAutoConfig config;
+  /// Configuration (resolution, headunit info, sensors, etc.).
+  final OpenAutoConfig config;
 
   /// Sensor data handles. Use `sensor.<name>.set(data)` to push values.
   late final SensorManager sensor;
@@ -520,11 +542,12 @@ class OpenAutoBridge {
 
   StreamSubscription<void>? _configRequestedSub;
 
-  OpenAutoBridge() {
+  OpenAutoBridge({OpenAutoConfig? config})
+      : config = config ?? OpenAutoConfig() {
     _sensorStates = {
       for (final type in SensorType.values) type: _SensorState(type),
     };
-    config = OpenAutoConfig._(_sensorStates);
+    this.config._attachSensors(_sensorStates);
     sensor = SensorManager._(_sensorStates);
 
     // Auto-respond to config requests from the core.

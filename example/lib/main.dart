@@ -255,10 +255,10 @@ class ConfigPage extends StatefulWidget {
 class _ConfigPageState extends State<ConfigPage> {
   late TextEditingController _displayNameCtrl;
   late TextEditingController _densityCtrl;
-  late TextEditingController _huMakeCtrl;
-  late TextEditingController _huModelCtrl;
-  late TextEditingController _huYearCtrl;
-  late TextEditingController _huSoftwareVersionCtrl;
+  late TextEditingController _headunitMakeCtrl;
+  late TextEditingController _headunitModelCtrl;
+  late TextEditingController _headunitYearCtrl;
+  late TextEditingController _headunitSoftwareVersionCtrl;
 
   static const _resolutions = [
     'VIDEO_800x480',
@@ -278,20 +278,20 @@ class _ConfigPageState extends State<ConfigPage> {
     super.initState();
     _displayNameCtrl = TextEditingController(text: _cfg.displayName);
     _densityCtrl = TextEditingController(text: _cfg.videoDensity.toString());
-    _huMakeCtrl = TextEditingController(text: _cfg.huMake);
-    _huModelCtrl = TextEditingController(text: _cfg.huModel);
-    _huYearCtrl = TextEditingController(text: _cfg.huYear);
-    _huSoftwareVersionCtrl = TextEditingController(text: _cfg.huSoftwareVersion);
+    _headunitMakeCtrl = TextEditingController(text: _cfg.headunitMake);
+    _headunitModelCtrl = TextEditingController(text: _cfg.headunitModel);
+    _headunitYearCtrl = TextEditingController(text: _cfg.headunitYear);
+    _headunitSoftwareVersionCtrl = TextEditingController(text: _cfg.headunitSoftwareVersion);
   }
 
   @override
   void dispose() {
     _displayNameCtrl.dispose();
     _densityCtrl.dispose();
-    _huMakeCtrl.dispose();
-    _huModelCtrl.dispose();
-    _huYearCtrl.dispose();
-    _huSoftwareVersionCtrl.dispose();
+    _headunitMakeCtrl.dispose();
+    _headunitModelCtrl.dispose();
+    _headunitYearCtrl.dispose();
+    _headunitSoftwareVersionCtrl.dispose();
     super.dispose();
   }
 
@@ -299,10 +299,10 @@ class _ConfigPageState extends State<ConfigPage> {
   void _syncTextFields() {
     _cfg.displayName = _displayNameCtrl.text;
     _cfg.videoDensity = int.tryParse(_densityCtrl.text) ?? 140;
-    _cfg.huMake = _huMakeCtrl.text;
-    _cfg.huModel = _huModelCtrl.text;
-    _cfg.huYear = _huYearCtrl.text;
-    _cfg.huSoftwareVersion = _huSoftwareVersionCtrl.text;
+    _cfg.headunitMake = _headunitMakeCtrl.text;
+    _cfg.headunitModel = _headunitModelCtrl.text;
+    _cfg.headunitYear = _headunitYearCtrl.text;
+    _cfg.headunitSoftwareVersion = _headunitSoftwareVersionCtrl.text;
   }
 
   @override
@@ -380,25 +380,25 @@ class _ConfigPageState extends State<ConfigPage> {
         // --- Headunit Info ---
         _sectionHeader('Headunit Info'),
         TextField(
-          controller: _huMakeCtrl,
+          controller: _headunitMakeCtrl,
           decoration: const InputDecoration(labelText: 'Make'),
           onChanged: (_) => _syncTextFields(),
         ),
         const SizedBox(height: 8),
         TextField(
-          controller: _huModelCtrl,
+          controller: _headunitModelCtrl,
           decoration: const InputDecoration(labelText: 'Model'),
           onChanged: (_) => _syncTextFields(),
         ),
         const SizedBox(height: 8),
         TextField(
-          controller: _huYearCtrl,
+          controller: _headunitYearCtrl,
           decoration: const InputDecoration(labelText: 'Year'),
           onChanged: (_) => _syncTextFields(),
         ),
         const SizedBox(height: 8),
         TextField(
-          controller: _huSoftwareVersionCtrl,
+          controller: _headunitSoftwareVersionCtrl,
           decoration: const InputDecoration(labelText: 'Software Version'),
           onChanged: (_) => _syncTextFields(),
         ),
