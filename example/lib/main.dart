@@ -28,11 +28,11 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    initPlatformState();
     _initSensors();
+    initPlatformState();
   }
 
-  Future<void> _initSensors() async {
+  void _initSensors() {
     // Enable sensors + cyclic resend
     _openAutoBridgePlugin.config.sensors.nightMode
       ..enabled = true
@@ -42,9 +42,6 @@ class _MyAppState extends State<MyApp> {
       ..enabled = true
       ..cyclic = true
       ..cyclicTime = 5000;
-
-    // Push sensor config to core
-    await _openAutoBridgePlugin.config.apply();
 
     // Set initial sensor values
     _openAutoBridgePlugin.sensor.nightMode.set({'enabled': false});
@@ -243,7 +240,8 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ---------------------------------------------------------------------------
-// Configuration page
+// Configuration page — edits config.* properties directly.
+// Changes take effect on the next request_config handshake.
 // ---------------------------------------------------------------------------
 
 class ConfigPage extends StatefulWidget {
@@ -255,21 +253,8 @@ class ConfigPage extends StatefulWidget {
 }
 
 class _ConfigPageState extends State<ConfigPage> {
-  Map<String, dynamic>? _config;
-  bool _loading = true;
-  String? _status;
-
-  // Editable top-level fields
   late TextEditingController _displayNameCtrl;
-  String _driverPosition = 'DRIVER_POSITION_LEFT';
-  bool _canPlayNativeMedia = false;
-
-  // Video channel (id 3)
-  String _codecResolution = 'VIDEO_800x480';
-  String _frameRate = 'VIDEO_FPS_30';
   late TextEditingController _densityCtrl;
-
-  // Headunit info
   late TextEditingController _huMakeCtrl;
   late TextEditingController _huModelCtrl;
   late TextEditingController _huYearCtrl;
@@ -286,16 +271,17 @@ class _ConfigPageState extends State<ConfigPage> {
     'DRIVER_POSITION_RIGHT',
   ];
 
+  OpenAutoConfig get _cfg => widget.plugin.config;
+
   @override
   void initState() {
     super.initState();
-    _displayNameCtrl = TextEditingController();
-    _densityCtrl = TextEditingController();
-    _huMakeCtrl = TextEditingController();
-    _huModelCtrl = TextEditingController();
-    _huYearCtrl = TextEditingController();
-    _huSoftwareVersionCtrl = TextEditingController();
-    _loadConfig();
+    _displayNameCtrl = TextEditingController(text: _cfg.displayName);
+    _densityCtrl = TextEditingController(text: _cfg.videoDensity.toString());
+    _huMakeCtrl = TextEditingController(text: _cfg.huMake);
+    _huModelCtrl = TextEditingController(text: _cfg.huModel);
+    _huYearCtrl = TextEditingController(text: _cfg.huYear);
+    _huSoftwareVersionCtrl = TextEditingController(text: _cfg.huSoftwareVersion);
   }
 
   @override
@@ -309,131 +295,21 @@ class _ConfigPageState extends State<ConfigPage> {
     super.dispose();
   }
 
-  Future<void> _loadConfig() async {
-    final config = await widget.plugin.getConfig();
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _config = config;
-      if (config != null) _populateFields(config);
-    });
-  }
-
-  void _populateFields(Map<String, dynamic> config) {
-    _displayNameCtrl.text = config['display_name'] ?? '';
-    _driverPosition = config['driver_position'] ?? 'DRIVER_POSITION_LEFT';
-    _canPlayNativeMedia = config['can_play_native_media_during_vr'] ?? false;
-
-    // Find video channel (id 3)
-    final channels = config['channels'] as List<dynamic>? ?? [];
-    for (final ch in channels) {
-      if (ch['id'] == 3 && ch['media_sink_service'] != null) {
-        final sink = ch['media_sink_service'] as Map<String, dynamic>;
-        final videoConfigs = sink['video_configs'] as List<dynamic>? ?? [];
-        if (videoConfigs.isNotEmpty) {
-          final vc = videoConfigs[0] as Map<String, dynamic>;
-          _codecResolution = vc['codec_resolution'] ?? _codecResolution;
-          _frameRate = vc['frame_rate'] ?? _frameRate;
-          _densityCtrl.text = (vc['density'] ?? 140).toString();
-        }
-        break;
-      }
-    }
-
-    // Headunit info
-    final hu = config['headunit_info'] as Map<String, dynamic>? ?? {};
-    _huMakeCtrl.text = hu['make'] ?? '';
-    _huModelCtrl.text = hu['model'] ?? '';
-    _huYearCtrl.text = hu['year'] ?? '';
-    _huSoftwareVersionCtrl.text = hu['head_unit_software_version'] ?? '';
-  }
-
-  Map<String, dynamic> _buildConfig() {
-    final config = _config != null
-        ? Map<String, dynamic>.from(
-            jsonDecode(jsonEncode(_config)) as Map<String, dynamic>)
-        : <String, dynamic>{};
-
-    config['display_name'] = _displayNameCtrl.text;
-    config['driver_position'] = _driverPosition;
-    config['can_play_native_media_during_vr'] = _canPlayNativeMedia;
-
-    // Update video channel
-    final channels = (config['channels'] as List<dynamic>? ?? [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    for (final ch in channels) {
-      if (ch['id'] == 3 && ch['media_sink_service'] != null) {
-        final sink = Map<String, dynamic>.from(
-            ch['media_sink_service'] as Map);
-        final videoConfigs =
-            (sink['video_configs'] as List<dynamic>? ?? [])
-                .map((e) => Map<String, dynamic>.from(e as Map))
-                .toList();
-        if (videoConfigs.isNotEmpty) {
-          videoConfigs[0]['codec_resolution'] = _codecResolution;
-          videoConfigs[0]['frame_rate'] = _frameRate;
-          videoConfigs[0]['density'] =
-              int.tryParse(_densityCtrl.text) ?? 140;
-        }
-        sink['video_configs'] = videoConfigs;
-        ch['media_sink_service'] = sink;
-        break;
-      }
-    }
-    config['channels'] = channels;
-
-    // Update headunit info
-    final hu = Map<String, dynamic>.from(
-        config['headunit_info'] as Map? ?? {});
-    hu['make'] = _huMakeCtrl.text;
-    hu['model'] = _huModelCtrl.text;
-    hu['year'] = _huYearCtrl.text;
-    hu['head_unit_software_version'] = _huSoftwareVersionCtrl.text;
-    config['headunit_info'] = hu;
-
-    return config;
-  }
-
-  Future<void> _sendConfig() async {
-    final config = _buildConfig();
-    await widget.plugin.sendConfigSet(config);
-    if (!mounted) return;
-    setState(() => _status = 'Config sent');
-  }
-
-  Future<void> _resetConfig() async {
-    await widget.plugin.sendConfigReset();
-    if (!mounted) return;
-    setState(() => _status = 'Config reset sent');
-    _loadConfig();
+  /// Writes text field values back to the config object.
+  void _syncTextFields() {
+    _cfg.displayName = _displayNameCtrl.text;
+    _cfg.videoDensity = int.tryParse(_densityCtrl.text) ?? 140;
+    _cfg.huMake = _huMakeCtrl.text;
+    _cfg.huModel = _huModelCtrl.text;
+    _cfg.huYear = _huYearCtrl.text;
+    _cfg.huSoftwareVersion = _huSoftwareVersionCtrl.text;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Service Config'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.restore),
-            tooltip: 'Reset to default',
-            onPressed: _resetConfig,
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _config == null
-              ? const Center(child: Text('No config file found'))
-              : _buildForm(),
-      floatingActionButton: _config != null
-          ? FloatingActionButton.extended(
-              onPressed: _sendConfig,
-              icon: const Icon(Icons.send),
-              label: const Text('Apply'),
-            )
-          : null,
+      appBar: AppBar(title: const Text('Service Config')),
+      body: _buildForm(),
     );
   }
 
@@ -441,33 +317,29 @@ class _ConfigPageState extends State<ConfigPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (_status != null) ...[
-          Text(_status!, style: TextStyle(color: Colors.green[700])),
-          const SizedBox(height: 12),
-        ],
-
         // --- General ---
         _sectionHeader('General'),
         TextField(
           controller: _displayNameCtrl,
           decoration: const InputDecoration(labelText: 'Display Name'),
+          onChanged: (_) => _syncTextFields(),
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _driverPositions.contains(_driverPosition)
-              ? _driverPosition
+          value: _driverPositions.contains(_cfg.driverPosition)
+              ? _cfg.driverPosition
               : _driverPositions.first,
           decoration: const InputDecoration(labelText: 'Driver Position'),
           items: _driverPositions
               .map((v) => DropdownMenuItem(value: v, child: Text(v)))
               .toList(),
-          onChanged: (v) => setState(() => _driverPosition = v!),
+          onChanged: (v) => setState(() => _cfg.driverPosition = v!),
         ),
         const SizedBox(height: 8),
         SwitchListTile(
           title: const Text('Can play native media during VR'),
-          value: _canPlayNativeMedia,
-          onChanged: (v) => setState(() => _canPlayNativeMedia = v),
+          value: _cfg.canPlayNativeMediaDuringVr,
+          onChanged: (v) => setState(() => _cfg.canPlayNativeMediaDuringVr = v),
         ),
 
         const SizedBox(height: 16),
@@ -475,31 +347,32 @@ class _ConfigPageState extends State<ConfigPage> {
         // --- Video ---
         _sectionHeader('Video (Channel 3)'),
         DropdownButtonFormField<String>(
-          value: _resolutions.contains(_codecResolution)
-              ? _codecResolution
+          value: _resolutions.contains(_cfg.videoCodecResolution)
+              ? _cfg.videoCodecResolution
               : _resolutions.first,
           decoration: const InputDecoration(labelText: 'Resolution'),
           items: _resolutions
               .map((v) => DropdownMenuItem(value: v, child: Text(v)))
               .toList(),
-          onChanged: (v) => setState(() => _codecResolution = v!),
+          onChanged: (v) => setState(() => _cfg.videoCodecResolution = v!),
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _frameRates.contains(_frameRate)
-              ? _frameRate
+          value: _frameRates.contains(_cfg.videoFrameRate)
+              ? _cfg.videoFrameRate
               : _frameRates.first,
           decoration: const InputDecoration(labelText: 'Frame Rate'),
           items: _frameRates
               .map((v) => DropdownMenuItem(value: v, child: Text(v)))
               .toList(),
-          onChanged: (v) => setState(() => _frameRate = v!),
+          onChanged: (v) => setState(() => _cfg.videoFrameRate = v!),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _densityCtrl,
           decoration: const InputDecoration(labelText: 'Density'),
           keyboardType: TextInputType.number,
+          onChanged: (_) => _syncTextFields(),
         ),
 
         const SizedBox(height: 16),
@@ -509,21 +382,25 @@ class _ConfigPageState extends State<ConfigPage> {
         TextField(
           controller: _huMakeCtrl,
           decoration: const InputDecoration(labelText: 'Make'),
+          onChanged: (_) => _syncTextFields(),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _huModelCtrl,
           decoration: const InputDecoration(labelText: 'Model'),
+          onChanged: (_) => _syncTextFields(),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _huYearCtrl,
           decoration: const InputDecoration(labelText: 'Year'),
+          onChanged: (_) => _syncTextFields(),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _huSoftwareVersionCtrl,
           decoration: const InputDecoration(labelText: 'Software Version'),
+          onChanged: (_) => _syncTextFields(),
         ),
 
         const SizedBox(height: 16),
@@ -537,12 +414,12 @@ class _ConfigPageState extends State<ConfigPage> {
             borderRadius: BorderRadius.circular(4),
           ),
           child: SelectableText(
-            const JsonEncoder.withIndent('  ').convert(_buildConfig()),
+            const JsonEncoder.withIndent('  ').convert(_cfg.buildServiceDiscovery()),
             style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
           ),
         ),
 
-        const SizedBox(height: 80), // space for FAB
+        const SizedBox(height: 16),
       ],
     );
   }

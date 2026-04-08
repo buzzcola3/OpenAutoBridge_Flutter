@@ -291,44 +291,165 @@ class AudioConfig {
 class OpenAutoConfig {
   final SensorsConfig sensors;
   final AudioConfig audio = AudioConfig();
-  final OpenAutoBridge _bridge;
 
-  OpenAutoConfig._(Map<SensorType, _SensorState> states, this._bridge)
+  // Top-level fields
+  String displayName = 'OpenAutoCore';
+  String driverPosition = 'DRIVER_POSITION_RIGHT';
+  bool canPlayNativeMediaDuringVr = false;
+  bool probeForSupport = false;
+
+  // Video (channel 3)
+  String videoCodecResolution = 'VIDEO_800x480';
+  String videoFrameRate = 'VIDEO_FPS_30';
+  int videoDensity = 140;
+
+  // Touch (channel 8) — matches video resolution by default.
+  int touchWidth = 800;
+  int touchHeight = 480;
+
+  // Headunit info
+  String huMake = 'blank';
+  String huModel = 'blank';
+  String huYear = 'blank';
+  String huVehicleId = 'blank';
+  String huHeadUnitMake = 'blank';
+  String huHeadUnitModel = 'blank';
+  String huSoftwareBuild = '1';
+  String huSoftwareVersion = '1.0';
+
+  OpenAutoConfig._(Map<SensorType, _SensorState> states)
       : sensors = SensorsConfig._(states);
 
-  /// Pushes the current sensor configuration to the core.
+  /// Builds the full service-discovery config map.
   ///
-  /// Fetches the running service-discovery config, rebuilds the
-  /// `sensor_source_service.sensors` list from the enabled flags,
-  /// and sends it back.
-  Future<void> apply() async {
-    final config = await _bridge.getConfig();
-    if (config == null) return;
-
-    final channels = config['channels'] as List<dynamic>?;
-    if (channels == null) return;
-
+  /// The sensor list in channel 1 is built dynamically from enabled
+  /// [sensors] flags. All other values come from properties on this
+  /// config object.
+  Map<String, dynamic> buildServiceDiscovery() {
     final sensorList = sensors._states.entries
         .where((e) => e.value.enabled)
         .map((e) => {'sensor_type': e.key.protoEnum})
         .toList();
 
-    bool found = false;
-    for (final ch in channels) {
-      if (ch is Map<String, dynamic> && ch['id'] == 1) {
-        ch['sensor_source_service'] = {'sensors': sensorList};
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      channels.add({
-        'id': 1,
-        'sensor_source_service': {'sensors': sensorList},
-      });
-    }
-
-    await _bridge.sendConfigSet(config);
+    return <String, dynamic>{
+      'channels': [
+        {
+          'id': 3,
+          'media_sink_service': {
+            'available_type': 'MEDIA_CODEC_VIDEO_H264_BP',
+            'video_configs': [
+              {
+                'codec_resolution': videoCodecResolution,
+                'frame_rate': videoFrameRate,
+                'width_margin': 0,
+                'height_margin': 0,
+                'density': videoDensity,
+              }
+            ],
+            'available_while_in_call': true,
+          },
+        },
+        {
+          'id': 9,
+          'media_source_service': {
+            'available_type': 'MEDIA_CODEC_AUDIO_PCM',
+            'audio_config': {
+              'sampling_rate': 16000,
+              'number_of_bits': 16,
+              'number_of_channels': 1,
+            },
+          },
+        },
+        {
+          'id': 1,
+          'sensor_source_service': {
+            'sensors': sensorList,
+          },
+        },
+        {
+          'id': 8,
+          'input_source_service': {
+            'touchscreen': [
+              {'width': touchWidth, 'height': touchHeight},
+            ],
+          },
+        },
+        {
+          'id': 10,
+          'bluetooth_service': {
+            'car_address': '',
+            'supported_pairing_methods': ['BLUETOOTH_PAIRING_UNAVAILABLE'],
+          },
+        },
+        {
+          'id': 4,
+          'media_sink_service': {
+            'available_type': 'MEDIA_CODEC_AUDIO_PCM',
+            'audio_type': 'AUDIO_STREAM_MEDIA',
+            'audio_configs': [
+              {
+                'sampling_rate': 48000,
+                'number_of_bits': 16,
+                'number_of_channels': 2,
+              }
+            ],
+            'available_while_in_call': true,
+          },
+        },
+        {
+          'id': 6,
+          'media_sink_service': {
+            'available_type': 'MEDIA_CODEC_AUDIO_PCM',
+            'audio_type': 'AUDIO_STREAM_SYSTEM_AUDIO',
+            'audio_configs': [
+              {
+                'sampling_rate': 16000,
+                'number_of_bits': 16,
+                'number_of_channels': 1,
+              }
+            ],
+            'available_while_in_call': true,
+          },
+        },
+        {
+          'id': 5,
+          'media_sink_service': {
+            'available_type': 'MEDIA_CODEC_AUDIO_PCM',
+            'audio_type': 'AUDIO_STREAM_GUIDANCE',
+            'audio_configs': [
+              {
+                'sampling_rate': 16000,
+                'number_of_bits': 16,
+                'number_of_channels': 1,
+              }
+            ],
+            'available_while_in_call': true,
+          },
+        },
+      ],
+      'driver_position': driverPosition,
+      'can_play_native_media_during_vr': canPlayNativeMediaDuringVr,
+      'display_name': displayName,
+      'probe_for_support': probeForSupport,
+      'connection_configuration': {
+        'ping_configuration': {
+          'timeout_ms': 3000,
+          'interval_ms': 1000,
+          'high_latency_threshold_ms': 200,
+          'tracked_ping_count': 5,
+        },
+      },
+      'headunit_info': {
+        'make': huMake,
+        'model': huModel,
+        'year': huYear,
+        'vehicle_id': huVehicleId,
+        'head_unit_make': huHeadUnitMake,
+        'head_unit_model': huHeadUnitModel,
+        'head_unit_software_build': huSoftwareBuild,
+        'head_unit_software_version': huSoftwareVersion,
+      },
+    };
   }
 }
 
@@ -389,7 +510,6 @@ class OpenAutoBridge {
   late final Map<SensorType, _SensorState> _sensorStates;
 
   /// Sensor configuration (enabled / cyclic / cyclicTime per sensor).
-  /// Call [OpenAutoConfig.apply] after changing to sync with the core.
   late final OpenAutoConfig config;
 
   /// Sensor data handles. Use `sensor.<name>.set(data)` to push values.
@@ -398,16 +518,40 @@ class OpenAutoBridge {
   /// Audio controls: per-channel volume and device enumeration.
   final AudioManager audio = AudioManager();
 
+  StreamSubscription<void>? _configRequestedSub;
+
   OpenAutoBridge() {
     _sensorStates = {
       for (final type in SensorType.values) type: _SensorState(type),
     };
-    config = OpenAutoConfig._(_sensorStates, this);
+    config = OpenAutoConfig._(_sensorStates);
     sensor = SensorManager._(_sensorStates);
+
+    // Auto-respond to config requests from the core.
+    _configRequestedSub =
+        OpenAutoBridgePlatform.instance.onConfigRequested.listen((_) async {
+      _sendServiceDiscovery();
+    });
+
+    // Also send config eagerly on startup so the core doesn't have to wait
+    // if it already sent request_config before we subscribed.
+    _sendServiceDiscovery();
   }
+
+  Future<void> _sendServiceDiscovery() async {
+    final discovery = config.buildServiceDiscovery();
+    final json = jsonEncode(discovery);
+    print('[ConfigProvider] Sending config response: $json');
+    await OpenAutoBridgePlatform.instance.sendConfigJson(json);
+  }
+
+  /// Stream that fires when the core sends a `request_config` message.
+  Stream<void> get onConfigRequested =>
+      OpenAutoBridgePlatform.instance.onConfigRequested;
 
   /// Cancels all periodic sensor timers. Call when done.
   void dispose() {
+    _configRequestedSub?.cancel();
     for (final state in _sensorStates.values) {
       state.dispose();
     }
@@ -461,39 +605,6 @@ class OpenAutoBridge {
   ///   no_voice_input, no_config, limit_message_len
   Future<void> sendSensorJson(String json) {
     return OpenAutoBridgePlatform.instance.sendSensorJson(json);
-  }
-
-  /// Requests the current config from the core (side A) over transport.
-  ///
-  /// Sends a `{"action": "get"}` message over `MsgType::CONFIGURATION`
-  /// and waits for the core to respond with the current config JSON.
-  /// If the core does not respond within 5 seconds, returns `null`.
-  ///
-  /// Returns the parsed JSON map, or `null` on timeout / error.
-  Future<Map<String, dynamic>?> getConfig() {
-    return OpenAutoBridgePlatform.instance.getConfig();
-  }
-
-  /// Replaces the running config on the core (side A).
-  ///
-  /// [config] must match the schema of
-  /// `ServiceDiscoveryResponse.default.json`. The core validates the
-  /// JSON by constructing the protobuf; if validation fails the request
-  /// is silently dropped.
-  ///
-  /// Fire-and-forget — there is no response.
-  Future<void> sendConfigSet(Map<String, dynamic> config) {
-    final request = jsonEncode({'action': 'set', 'config': config});
-    return OpenAutoBridgePlatform.instance.sendConfigJson(request);
-  }
-
-  /// Deletes the user overlay and reloads the shipped default on the
-  /// core (side A).
-  ///
-  /// Fire-and-forget — there is no response.
-  Future<void> sendConfigReset() {
-    final request = jsonEncode({'action': 'reset'});
-    return OpenAutoBridgePlatform.instance.sendConfigJson(request);
   }
 
   // ── Device control ──────────────────────────────────────────────────

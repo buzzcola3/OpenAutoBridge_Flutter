@@ -37,11 +37,6 @@ class MockOpenAutoBridgePlatform
   }
 
   @override
-  Future<Map<String, dynamic>?> getConfig() {
-    return Future.value({'test': true});
-  }
-
-  @override
   Future<void> sendControlJson(String json) {
     return Future.value();
   }
@@ -50,6 +45,20 @@ class MockOpenAutoBridgePlatform
 
   @override
   Stream<Map<String, dynamic>> get onControlReceived => _controlController.stream;
+
+  final _configRequestedController = StreamController<void>.broadcast();
+
+  @override
+  Stream<void> get onConfigRequested => _configRequestedController.stream;
+
+  @override
+  Future<void> setAudioVolume(String channel, int volume) => Future.value();
+
+  @override
+  Future<void> setAudioDevice(String device) => Future.value();
+
+  @override
+  Future<List<Map<String, String>>> getAudioDevices() => Future.value([]);
 }
 
 void main() {

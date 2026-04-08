@@ -12,9 +12,10 @@ class MethodChannelOpenAutoBridge extends OpenAutoBridgePlatform {
   @visibleForTesting
   final methodChannel = const MethodChannel('open_auto_bridge_flutter');
 
-  Completer<Map<String, dynamic>?>? _configCompleter;
   final StreamController<Map<String, dynamic>> _controlController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<void> _configRequestedController =
+      StreamController<void>.broadcast();
   bool _handlerInstalled = false;
 
   void _ensureHandler() {
@@ -27,8 +28,9 @@ class MethodChannelOpenAutoBridge extends OpenAutoBridgePlatform {
     if (call.method == 'onConfigReceived') {
       final json = call.arguments as String;
       final map = jsonDecode(json) as Map<String, dynamic>;
-      _configCompleter?.complete(map);
-      _configCompleter = null;
+      if (map['action'] == 'request_config') {
+        _configRequestedController.add(null);
+      }
     } else if (call.method == 'onControlReceived') {
       final json = call.arguments as String;
       final map = jsonDecode(json) as Map<String, dynamic>;
@@ -78,20 +80,6 @@ class MethodChannelOpenAutoBridge extends OpenAutoBridgePlatform {
   }
 
   @override
-  Future<Map<String, dynamic>?> getConfig() async {
-    _ensureHandler();
-    _configCompleter = Completer<Map<String, dynamic>?>();
-    await sendConfigJson(jsonEncode({'action': 'get'}));
-    return _configCompleter!.future.timeout(
-      const Duration(seconds: 5),
-      onTimeout: () {
-        _configCompleter = null;
-        return null;
-      },
-    );
-  }
-
-  @override
   Future<void> sendControlJson(String json) async {
     await methodChannel.invokeMethod<void>('sendControlJson', <String, dynamic>{
       'json': json,
@@ -102,6 +90,12 @@ class MethodChannelOpenAutoBridge extends OpenAutoBridgePlatform {
   Stream<Map<String, dynamic>> get onControlReceived {
     _ensureHandler();
     return _controlController.stream;
+  }
+
+  @override
+  Stream<void> get onConfigRequested {
+    _ensureHandler();
+    return _configRequestedController.stream;
   }
 
   @override

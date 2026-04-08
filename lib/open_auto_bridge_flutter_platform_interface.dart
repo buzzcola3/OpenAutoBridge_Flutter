@@ -48,10 +48,6 @@ abstract class OpenAutoBridgePlatform extends PlatformInterface {
     throw UnimplementedError('sendConfigJson() has not been implemented.');
   }
 
-  Future<Map<String, dynamic>?> getConfig() {
-    throw UnimplementedError('getConfig() has not been implemented.');
-  }
-
   Future<void> sendControlJson(String json) {
     throw UnimplementedError('sendControlJson() has not been implemented.');
   }
@@ -59,6 +55,11 @@ abstract class OpenAutoBridgePlatform extends PlatformInterface {
   /// Stream of control messages received from the core.
   Stream<Map<String, dynamic>> get onControlReceived {
     throw UnimplementedError('onControlReceived has not been implemented.');
+  }
+
+  /// Stream that fires when the core sends a `request_config` message.
+  Stream<void> get onConfigRequested {
+    throw UnimplementedError('onConfigRequested has not been implemented.');
   }
 
   Future<void> setAudioVolume(String channel, int volume) {
