@@ -302,6 +302,8 @@ class OpenAutoConfig {
   String videoCodecResolution;
   String videoFrameRate;
   int videoDensity;
+  int videoWidthMargin;
+  int videoHeightMargin;
 
   // Touch (channel 8) — matches video resolution by default.
   int touchWidth;
@@ -325,6 +327,8 @@ class OpenAutoConfig {
     this.videoCodecResolution = 'VIDEO_800x480',
     this.videoFrameRate = 'VIDEO_FPS_30',
     this.videoDensity = 140,
+    this.videoWidthMargin = 0,
+    this.videoHeightMargin = 0,
     this.touchWidth = 800,
     this.touchHeight = 480,
     this.headunitMake = 'blank',
@@ -363,8 +367,8 @@ class OpenAutoConfig {
               {
                 'codec_resolution': videoCodecResolution,
                 'frame_rate': videoFrameRate,
-                'width_margin': 0,
-                'height_margin': 0,
+                'width_margin': videoWidthMargin,
+                'height_margin': videoHeightMargin,
                 'density': videoDensity,
               }
             ],
