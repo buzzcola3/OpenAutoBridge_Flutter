@@ -241,7 +241,7 @@ class _ConfigPageState extends State<ConfigPage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _driverPositions.contains(_cfg.driverPosition)
+          initialValue: _driverPositions.contains(_cfg.driverPosition)
               ? _cfg.driverPosition
               : _driverPositions.first,
           decoration: const InputDecoration(labelText: 'Driver Position'),
@@ -262,7 +262,7 @@ class _ConfigPageState extends State<ConfigPage> {
         // --- Video ---
         _sectionHeader('Video (Channel 3)'),
         DropdownButtonFormField<String>(
-          value: _resolutions.contains(_cfg.videoCodecResolution)
+          initialValue: _resolutions.contains(_cfg.videoCodecResolution)
               ? _cfg.videoCodecResolution
               : _resolutions.first,
           decoration: const InputDecoration(labelText: 'Resolution'),
@@ -273,7 +273,7 @@ class _ConfigPageState extends State<ConfigPage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _frameRates.contains(_cfg.videoFrameRate)
+          initialValue: _frameRates.contains(_cfg.videoFrameRate)
               ? _cfg.videoFrameRate
               : _frameRates.first,
           decoration: const InputDecoration(labelText: 'Frame Rate'),
@@ -464,7 +464,7 @@ class _AudioPageState extends State<AudioPage> {
             const Text('No audio devices found')
           else
             DropdownButtonFormField<String>(
-              value: _devices.any((d) => d.name == _selectedDevice)
+              initialValue: _devices.any((d) => d.name == _selectedDevice)
                   ? _selectedDevice
                   : '',
               decoration:
