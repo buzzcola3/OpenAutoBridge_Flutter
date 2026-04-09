@@ -2,6 +2,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
+
 import 'open_auto_bridge_flutter_platform_interface.dart';
 
 /// Touch actions mirrored on native side.
@@ -346,6 +348,32 @@ class OpenAutoConfig {
     sensors = SensorsConfig._(states);
   }
 
+  // ── Resolution helpers ──────────────────────────────────────────────
+
+  static final _resolutionPattern = RegExp(r'VIDEO_(\d+)x(\d+)');
+
+  /// Full video frame width parsed from [videoCodecResolution].
+  int get videoFullWidth {
+    final m = _resolutionPattern.firstMatch(videoCodecResolution);
+    return m != null ? int.parse(m.group(1)!) : 800;
+  }
+
+  /// Full video frame height parsed from [videoCodecResolution].
+  int get videoFullHeight {
+    final m = _resolutionPattern.firstMatch(videoCodecResolution);
+    return m != null ? int.parse(m.group(2)!) : 480;
+  }
+
+  /// Width of the actual content area (full width minus total margin).
+  int get videoContentWidth => videoFullWidth - videoWidthMargin;
+
+  /// Height of the actual content area (full height minus total margin).
+  int get videoContentHeight => videoFullHeight - videoHeightMargin;
+
+  /// Aspect ratio of the content area.
+  double get videoContentAspectRatio =>
+      videoContentHeight > 0 ? videoContentWidth / videoContentHeight : 16 / 9;
+
   /// Builds the full service-discovery config map.
   ///
   /// The sensor list in channel 1 is built dynamically from enabled
@@ -667,5 +695,161 @@ class OpenAutoBridge {
   Future<void> disconnectDevice(String id) {
     final request = jsonEncode({'action': 'disconnect_device', 'id': id});
     return OpenAutoBridgePlatform.instance.sendControlJson(request);
+  }
+}
+
+// ── Video widget ─────────────────────────────────────────────────────
+
+/// Displays the OpenAuto video texture with automatic margin cropping
+/// and touch-coordinate remapping.
+///
+/// Place this widget wherever you want the Android Auto projection to
+/// appear. It reads margin/resolution values from the bridge's
+/// [OpenAutoConfig] and handles everything internally:
+///
+///  * Scales the native texture so only the content area (inside
+///    margins) is visible.
+///  * Clips the margin pixels.
+///  * Remaps touch coordinates so that a tap on the visible content
+///    maps to the correct position in the full AA frame.
+class OpenAutoVideoView extends StatefulWidget {
+  /// The bridge instance whose config and touch API are used.
+  final OpenAutoBridge bridge;
+
+  /// The texture ID returned by [OpenAutoBridge.getVideoTextureId].
+  final int textureId;
+
+  const OpenAutoVideoView({
+    super.key,
+    required this.bridge,
+    required this.textureId,
+  });
+
+  @override
+  State<OpenAutoVideoView> createState() => _OpenAutoVideoViewState();
+}
+
+class _OpenAutoVideoViewState extends State<OpenAutoVideoView> {
+  final Set<int> _activePointers = {};
+  final Map<int, int> _pointerIdMap = {};
+  int _nextPointerId = 0;
+  Size _widgetSize = Size.zero;
+
+  OpenAutoConfig get _cfg => widget.bridge.config;
+
+  int _mapPointerId(int systemPointer) {
+    return _pointerIdMap.putIfAbsent(systemPointer, () => _nextPointerId++);
+  }
+
+  void _sendTouch(PointerEvent event, TouchAction action) {
+    if (_widgetSize.width == 0 || _widgetSize.height == 0) return;
+
+    // Normalized [0,1] within the visible (cropped) widget.
+    final double xLocal =
+        (event.localPosition.dx / _widgetSize.width).clamp(0.0, 1.0);
+    final double yLocal =
+        (event.localPosition.dy / _widgetSize.height).clamp(0.0, 1.0);
+
+    // Remap to full-frame normalised coords including margin offsets.
+    // Margin values are totals, split evenly (half per side).
+    final int fw = _cfg.videoFullWidth;
+    final int fh = _cfg.videoFullHeight;
+    final double halfMw = _cfg.videoWidthMargin / 2.0;
+    final double halfMh = _cfg.videoHeightMargin / 2.0;
+
+    final double xFull = fw > 0 ? (halfMw + xLocal * (fw - _cfg.videoWidthMargin)) / fw : xLocal;
+    final double yFull = fh > 0 ? (halfMh + yLocal * (fh - _cfg.videoHeightMargin)) / fh : yLocal;
+
+    widget.bridge.sendTouchEvent(
+      pointerId: _mapPointerId(event.pointer),
+      x: xFull.clamp(0.0, 1.0),
+      y: yFull.clamp(0.0, 1.0),
+      action: action,
+    );
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    final bool isFirst = _activePointers.isEmpty;
+    _activePointers.add(event.pointer);
+    _sendTouch(event, isFirst ? TouchAction.down : TouchAction.pointerDown);
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (!_activePointers.contains(event.pointer)) return;
+    _sendTouch(event, TouchAction.moved);
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    final bool isLast = _activePointers.length <= 1;
+    _sendTouch(event, isLast ? TouchAction.up : TouchAction.pointerUp);
+    _activePointers.remove(event.pointer);
+    _pointerIdMap.remove(event.pointer);
+    if (_activePointers.isEmpty) {
+      _pointerIdMap.clear();
+      _nextPointerId = 0;
+    }
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    _sendTouch(event, TouchAction.up);
+    _activePointers.clear();
+    _pointerIdMap.clear();
+    _nextPointerId = 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final int fw = _cfg.videoFullWidth;
+    final int fh = _cfg.videoFullHeight;
+    final int mw = _cfg.videoWidthMargin;
+    final int mh = _cfg.videoHeightMargin;
+    final int cw = _cfg.videoContentWidth;
+    final int ch = _cfg.videoContentHeight;
+
+    // When there are no margins, skip the scale/clip entirely.
+    final bool hasMargin = mw > 0 || mh > 0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double aspect = ch > 0 ? cw / ch : 16 / 9;
+        double width = constraints.maxWidth;
+        double height = width / aspect;
+        if (height > constraints.maxHeight) {
+          height = constraints.maxHeight;
+          width = height * aspect;
+        }
+        _widgetSize = Size(width, height);
+
+        Widget texture = Texture(textureId: widget.textureId);
+
+        if (hasMargin && cw > 0 && ch > 0) {
+          // Scale the texture up so the content area fills the widget,
+          // then clip the overflowing margins away.
+          final double scaleX = fw / cw;
+          final double scaleY = fh / ch;
+          texture = ClipRect(
+            child: Transform.scale(
+              scaleX: scaleX,
+              scaleY: scaleY,
+              child: texture,
+            ),
+          );
+        }
+
+        return Center(
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: Listener(
+              onPointerDown: _handlePointerDown,
+              onPointerMove: _handlePointerMove,
+              onPointerUp: _handlePointerUp,
+              onPointerCancel: _handlePointerCancel,
+              child: texture,
+            ),
+          ),
+        );
+      },
+    );
   }
 }

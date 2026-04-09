@@ -18,12 +18,10 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   String _platformVersion = 'Unknown';
-  final _openAutoBridgePlugin = OpenAutoBridge();
+  final _openAutoBridgePlugin = OpenAutoBridge(
+    config: OpenAutoConfig(videoHeightMargin: 150),
+  );
   int? _videoTextureId;
-  final Set<int> _activePointers = <int>{};
-  final Map<int, int> _pointerIdMap = {}; // Flutter pointer → sequential ID
-  int _nextPointerId = 0;
-  Size? _textureSize;
 
   @override
   void initState() {
@@ -78,63 +76,6 @@ class _MyAppState extends State<MyApp> {
       _platformVersion = platformVersion;
   _videoTextureId = textureId;
     });
-  }
-
-  int _mapPointerId(int flutterPointer) {
-    return _pointerIdMap.putIfAbsent(flutterPointer, () => _nextPointerId++);
-  }
-
-  void _sendTouch(PointerEvent event, TouchAction action) {
-    final size = _textureSize;
-    if (size == null || size.width == 0 || size.height == 0) return;
-
-    final double xNorm = (event.localPosition.dx / size.width).clamp(0.0, 1.0);
-    final double yNorm = (event.localPosition.dy / size.height).clamp(0.0, 1.0);
-
-    _openAutoBridgePlugin.sendTouchEvent(
-      pointerId: _mapPointerId(event.pointer),
-      x: xNorm,
-      y: yNorm,
-      action: action,
-    );
-  }
-
-  void _handlePointerDown(PointerDownEvent event) {
-    final bool isFirst = _activePointers.isEmpty;
-    _activePointers.add(event.pointer);
-    _sendTouch(event, isFirst ? TouchAction.down : TouchAction.pointerDown);
-  }
-
-  void _handlePointerMove(PointerMoveEvent event) {
-    if (!_activePointers.contains(event.pointer)) return;
-    _sendTouch(event, TouchAction.moved);
-  }
-
-  void _handlePointerUp(PointerUpEvent event) {
-    final bool isLast = _activePointers.length <= 1;
-    _sendTouch(event, isLast ? TouchAction.up : TouchAction.pointerUp);
-    _activePointers.remove(event.pointer);
-    _pointerIdMap.remove(event.pointer);
-    if (_activePointers.isEmpty) {
-      _pointerIdMap.clear();
-      _nextPointerId = 0;
-    }
-  }
-
-  void _handlePointerCancel(PointerCancelEvent event) {
-    // Treat cancel as all fingers lifted
-    _sendTouch(event, TouchAction.up);
-    _activePointers.clear();
-    _pointerIdMap.clear();
-    _nextPointerId = 0;
-  }
-
-  void _openConfigPage() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ConfigPage(plugin: _openAutoBridgePlugin),
-      ),
-    );
   }
 
   @override
@@ -195,36 +136,10 @@ class _MyAppState extends State<MyApp> {
                     else ...[
                       Text('Texture ID: $_videoTextureId'),
                       const SizedBox(height: 8),
-                      // Render the native GL video texture with flex to avoid overflow.
                       Flexible(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final double maxWidth = constraints.maxWidth;
-                            final double maxHeight = constraints.maxHeight;
-                            const double aspect = 16 / 9;
-
-                            double width = maxWidth;
-                            double height = width / aspect;
-                            if (height > maxHeight) {
-                              height = maxHeight;
-                              width = height * aspect;
-                            }
-                            _textureSize = Size(width, height);
-
-                            return Center(
-                              child: SizedBox(
-                                width: width,
-                                height: height,
-                                child: Listener(
-                                  onPointerDown: _handlePointerDown,
-                                  onPointerMove: _handlePointerMove,
-                                  onPointerUp: _handlePointerUp,
-                                  onPointerCancel: _handlePointerCancel,
-                                  child: Texture(textureId: _videoTextureId!),
-                                ),
-                              ),
-                            );
-                          },
+                        child: OpenAutoVideoView(
+                          bridge: _openAutoBridgePlugin,
+                          textureId: _videoTextureId!,
                         ),
                       ),
                     ],
