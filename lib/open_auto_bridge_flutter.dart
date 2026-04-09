@@ -588,9 +588,11 @@ class OpenAutoBridge {
       _sendServiceDiscovery();
     });
 
-    // Also send config eagerly on startup so the core doesn't have to wait
+    // Send config eagerly on startup so the core doesn't have to wait
     // if it already sent request_config before we subscribed.
-    _sendServiceDiscovery();
+    // Deferred to a microtask so callers can modify config in initState
+    // before the first send.
+    Future.microtask(() => _sendServiceDiscovery());
   }
 
   Future<void> _sendServiceDiscovery() async {
