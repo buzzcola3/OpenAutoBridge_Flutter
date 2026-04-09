@@ -600,6 +600,13 @@ class OpenAutoBridge {
     await OpenAutoBridgePlatform.instance.sendConfigJson(json);
   }
 
+  /// Sends the current [config] to the core.
+  ///
+  /// Call this after modifying config properties at runtime to push
+  /// the changes immediately without waiting for the next
+  /// `request_config` handshake.
+  Future<void> sendConfig() => _sendServiceDiscovery();
+
   /// Stream that fires when the core sends a `request_config` message.
   Stream<void> get onConfigRequested =>
       OpenAutoBridgePlatform.instance.onConfigRequested;
