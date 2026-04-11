@@ -42,7 +42,7 @@ void OAAudioPlayer::buildPipeline() {
                "caps",         caps,
                "format",       GST_FORMAT_TIME,
                "is-live",      TRUE,
-               "do-timestamp", FALSE,
+               "do-timestamp", TRUE,
                nullptr);
   gst_caps_unref(caps);
 
