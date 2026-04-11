@@ -572,6 +572,10 @@ class OpenAutoBridge {
   /// Audio controls: per-channel volume and device enumeration.
   final AudioManager audio = AudioManager();
 
+  /// When true, the video view stays hidden even if a device reconnects.
+  /// Set by [disconnectDevice], cleared by [connectDevice].
+  bool _videoSuppressed = false;
+
   StreamSubscription<void>? _configRequestedSub;
 
   OpenAutoBridge({OpenAutoConfig? config})
@@ -693,6 +697,7 @@ class OpenAutoBridge {
   /// The core sets the device status to "connected" and broadcasts
   /// an updated device_list.
   Future<void> connectDevice(String id) {
+    _videoSuppressed = false;
     final request = jsonEncode({'action': 'connect_device', 'id': id});
     return OpenAutoBridgePlatform.instance.sendControlJson(request);
   }
@@ -701,7 +706,9 @@ class OpenAutoBridge {
   ///
   /// The core stops the AA session and marks the device back as
   /// "available", then broadcasts an updated device_list.
+  /// The video view will remain hidden until [connectDevice] is called.
   Future<void> disconnectDevice(String id) {
+    _videoSuppressed = true;
     final request = jsonEncode({'action': 'disconnect_device', 'id': id});
     return OpenAutoBridgePlatform.instance.sendControlJson(request);
   }
@@ -766,8 +773,12 @@ class _OpenAutoVideoViewState extends State<OpenAutoVideoView> {
       final connected = devices.any(
         (d) => (d as Map<String, dynamic>)['status'] == 'connected',
       );
-      if (connected != _deviceConnected && mounted) {
-        setState(() => _deviceConnected = connected);
+      if (connected) {
+        widget.bridge._videoSuppressed = false;
+      }
+      final visible = connected && !widget.bridge._videoSuppressed;
+      if (visible != _deviceConnected && mounted) {
+        setState(() => _deviceConnected = visible);
       }
     }
   }
