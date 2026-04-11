@@ -682,10 +682,10 @@ static gboolean oa_video_texture_populate(FlTextureGL* texture,
 
     auto emit_fallback = [&](const char* /*reason*/) {
         if (!self->gl_tex) glGenTextures(1, &self->gl_tex);
-        static const uint8_t red[] = {0xFF, 0x00, 0x00, 0xFF};
+        static const uint8_t transparent[] = {0x00, 0x00, 0x00, 0x00};
         glBindTexture(GL_TEXTURE_2D, self->gl_tex);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0,
-                     GL_RGBA, GL_UNSIGNED_BYTE, red);
+                     GL_RGBA, GL_UNSIGNED_BYTE, transparent);
         *width = 1; *height = 1;
         *target = GL_TEXTURE_2D; *name = self->gl_tex;
     };
