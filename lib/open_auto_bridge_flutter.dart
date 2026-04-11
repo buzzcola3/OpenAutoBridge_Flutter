@@ -743,8 +743,34 @@ class _OpenAutoVideoViewState extends State<OpenAutoVideoView> {
   final Map<int, int> _pointerIdMap = {};
   int _nextPointerId = 0;
   Size _widgetSize = Size.zero;
+  bool _deviceConnected = false;
+  StreamSubscription<Map<String, dynamic>>? _controlSub;
 
   OpenAutoConfig get _cfg => widget.bridge.config;
+
+  @override
+  void initState() {
+    super.initState();
+    _controlSub = widget.bridge.onControlReceived.listen(_onControl);
+  }
+
+  @override
+  void dispose() {
+    _controlSub?.cancel();
+    super.dispose();
+  }
+
+  void _onControl(Map<String, dynamic> msg) {
+    if (msg['action'] == 'device_list') {
+      final devices = (msg['devices'] as List<dynamic>? ?? []);
+      final connected = devices.any(
+        (d) => (d as Map<String, dynamic>)['status'] == 'connected',
+      );
+      if (connected != _deviceConnected && mounted) {
+        setState(() => _deviceConnected = connected);
+      }
+    }
+  }
 
   int _mapPointerId(int systemPointer) {
     return _pointerIdMap.putIfAbsent(systemPointer, () => _nextPointerId++);
@@ -845,7 +871,7 @@ class _OpenAutoVideoViewState extends State<OpenAutoVideoView> {
           );
         }
 
-        return Center(
+        Widget result = Center(
           child: SizedBox(
             width: width,
             height: height,
@@ -857,6 +883,12 @@ class _OpenAutoVideoViewState extends State<OpenAutoVideoView> {
               child: texture,
             ),
           ),
+        );
+
+        return AnimatedOpacity(
+          opacity: _deviceConnected ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 300),
+          child: result,
         );
       },
     );
