@@ -16,6 +16,21 @@ BUNDLER_GIT_REF="${BUNDLER_GIT_REF:-main}"
 BUNDLER_PATH="${BUNDLER_PATH:-}"
 BUNDLER_ALWAYS_CHECK_UPDATES="${BUNDLER_ALWAYS_CHECK_UPDATES:-1}"
 
+# The bundler is a compiled native exe, so a copy built on another architecture
+# is unusable. It must be detected explicitly: with qemu binfmt registered on the
+# host, containers inherit it and a stale aarch64 exe will *silently* run under
+# emulation inside the amd64 cross image, then fail deep inside flutter_tools.
+# ELF e_machine lives at offset 18 (little endian): 3e00 = x86-64, b700 = aarch64.
+bundler_arch_matches_host() {
+  local exe="$1" want
+  case "$(uname -m)" in
+    x86_64)  want="3e00" ;;
+    aarch64) want="b700" ;;
+    *)       return 0 ;;  # unknown host; don't force a rebuild
+  esac
+  [[ "$(od -An -tx1 -j18 -N2 "$exe" 2>/dev/null | tr -d ' \n')" == "$want" ]]
+}
+
 resolve_bundler() {
   if [[ -n "$BUNDLER_PATH" && -x "$BUNDLER_PATH" ]]; then
     BUNDLER_CMD=("$BUNDLER_PATH")
@@ -28,7 +43,8 @@ resolve_bundler() {
   )
 
   for dir in "${candidate_dirs[@]}"; do
-    if [[ -x "$dir/build/flutter_drm_bundler" ]]; then
+    if [[ -x "$dir/build/flutter_drm_bundler" ]] \
+       && bundler_arch_matches_host "$dir/build/flutter_drm_bundler"; then
       BUNDLER_CMD=("$dir/build/flutter_drm_bundler")
       return
     fi
@@ -57,6 +73,9 @@ resolve_bundler() {
 
   if [[ ! -x build/flutter_drm_bundler ]]; then
     rebuild_bundler=1
+  elif ! bundler_arch_matches_host build/flutter_drm_bundler; then
+    echo "[bundler] cached exe is for another architecture; rebuilding for $(uname -m)"
+    rebuild_bundler=1
   fi
 
   if [[ "$rebuild_bundler" == "1" ]]; then
@@ -82,8 +101,29 @@ resolve_bundler
 # (libflutter_linux_gtk.so) as an input/output, so stale copies persist.
 rm -rf "$APP_DIR/build/flutter-drm"
 
+# Plugin symlinks under linux/flutter/ephemeral/ are generated state holding
+# absolute paths, so they are only valid in the environment that created them.
+# A previous run's host-side rewrite (see the fixup at the end of this script)
+# leaves them pointing at paths that do not exist inside the container, which
+# breaks add_subdirectory() in generated_plugins.cmake. Drop them and let
+# `flutter pub get` regenerate them for wherever we are running now.
+SYMLINK_DIR="$APP_DIR/linux/flutter/ephemeral/.plugin_symlinks"
+rm -rf "$SYMLINK_DIR"
+
 pushd "$APP_DIR" >/dev/null
 flutter pub get
+
+# The bundler only *locates* an existing plugin .so - it never invokes cmake or
+# ninja - so the native plugin must be compiled here. Without this step a stale
+# libopen_auto_bridge_flutter_plugin.so from an earlier run is silently bundled
+# and shipped to the Pi, so linux/*.cc changes never take effect.
+flutter_build_args=(linux --release)
+if [[ "$(uname -m)" == "x86_64" ]]; then
+  # Cross-compiling from the amd64 builder image (see Dockerfile.arm64-cross).
+  flutter_build_args+=(--target-platform=linux-arm64)
+fi
+flutter build "${flutter_build_args[@]}"
+
 "${BUNDLER_CMD[@]}" build --arch=arm64 --release
 popd >/dev/null
 
@@ -128,19 +168,26 @@ cp -a "$DEBUG_BUNDLE_DIR/." "$DEBUG_OUT_DIR/"
 echo "Flutter-drm arm64 debug-symbols bundle created at: $DEBUG_OUT_DIR"
 
 # --- Fix plugin symlinks for host debugging ---
-# Docker builds run flutter pub get inside the container where the workspace
-# is mounted at /workspace, leaving absolute symlinks that point to /workspace/
-# instead of the real host path. Repoint them so the debugger can resolve source.
-SYMLINK_DIR="$APP_DIR/linux/flutter/ephemeral/.plugin_symlinks"
-if [[ -d "$SYMLINK_DIR" ]]; then
-  for link in "$SYMLINK_DIR"/*; do
-    if [[ -L "$link" ]]; then
+# `flutter pub get` runs inside the container, where the workspace is mounted at
+# /workspace, so it writes absolute symlinks pointing at container paths. On the
+# host those dangle and the debugger cannot resolve plugin sources.
+#
+# The container cannot discover the host path on its own, so the caller passes it
+# in as HOST_ROOT_DIR. Rewriting against $ROOT_DIR instead would be a no-op here,
+# since ROOT_DIR is itself /workspace inside the container.
+HOST_ROOT_DIR="${HOST_ROOT_DIR:-}"
+CONTAINER_ROOT="${CONTAINER_ROOT:-/workspace}"
+
+if [[ -n "$HOST_ROOT_DIR" ]]; then
+  if [[ -d "$SYMLINK_DIR" ]]; then
+    for link in "$SYMLINK_DIR"/*; do
+      [[ -L "$link" ]] || continue
       target="$(readlink "$link")"
-      if [[ "$target" == /workspace* ]]; then
-        host_target="$ROOT_DIR${target#/workspace}"
+      if [[ "$target" == "$CONTAINER_ROOT" || "$target" == "$CONTAINER_ROOT"/* ]]; then
+        host_target="${HOST_ROOT_DIR}${target#"$CONTAINER_ROOT"}"
         echo "Fixing symlink: $(basename "$link") -> $host_target"
         ln -snf "$host_target" "$link"
       fi
-    fi
-  done
+    done
+  fi
 fi

@@ -4,8 +4,8 @@
     {
       "id": "dlTarget",
       "type": "promptString",
-      "description": "DebugLantern target (hostname or IP)",
-      "default": "192.168.1.28"
+      "description": "DebugLantern target (mDNS hostname or IP)",
+      "default": "orangepizero3.local"
     }
   ],
   "tasks": [
@@ -19,9 +19,10 @@
       "problemMatcher": []
     },
     {
-      "label": "docker: build builder image (arm64)",
+      "label": "docker: build builder image (arm64 cross)",
+      "detail": "amd64 image that cross-compiles to aarch64 - no qemu, native speed",
       "type": "shell",
-      "command": "sg docker -c 'docker buildx build --platform linux/arm64 -t openautobridge-flutter-builder-arm64 --load .'",
+      "command": "sg docker -c 'docker buildx build -f Dockerfile.arm64-cross -t openautobridge-flutter-cross-arm64 --load .'",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -51,45 +52,18 @@
     },
     {
       "label": "docker: flutter build linux arm64 (example)",
+      "detail": "Cross-compile just the arm64 app + plugin (no flutter-drm bundle)",
       "type": "shell",
-      "command": "rm -f example/linux/flutter/ephemeral/.plugin_symlinks/open_auto_bridge_flutter && sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -v open_auto_bridge_flutter-arm64-pub-cache:/root/.pub-cache -v open_auto_bridge_flutter-arm64-ccache:/root/.ccache -w /workspace/example openautobridge-flutter-builder-arm64 bash -c \"flutter pub get && flutter build linux\"' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/open_auto_bridge_flutter",
-      "dependsOn": "docker: build builder image (arm64)",
+      "command": "mkdir -p .cache/pub .cache/ccache .cache/home && sg docker -c \"docker run --rm -t --user $(id -u):$(id -g) -e HOME=/workspace/.cache/home -e PUB_CACHE=/workspace/.cache/pub -e CCACHE_DIR=/workspace/.cache/ccache -v '${workspaceFolder}:/workspace' -w /workspace/example openautobridge-flutter-cross-arm64 bash -c 'flutter pub get && flutter build linux --release --target-platform=linux-arm64'\" && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/open_auto_bridge_flutter",
+      "dependsOn": "docker: build builder image (arm64 cross)",
       "options": {
         "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
     },
     {
-      "label": "debuglantern: build debug bundle (arm64)",
-      "type": "shell",
-      "command": "sg docker -c 'docker run --rm -t --platform linux/arm64 -v \"${workspaceFolder}:/workspace\" -v open_auto_bridge_flutter-arm64-pub-cache:/root/.pub-cache -v open_auto_bridge_flutter-arm64-ccache:/root/.ccache -w /workspace openautobridge-flutter-builder-arm64 bash scripts/build_flutter_drm_release_arm64.sh example' && ln -snf ${workspaceFolder} example/linux/flutter/ephemeral/.plugin_symlinks/open_auto_bridge_flutter",
-      "dependsOn": "docker: build builder image (arm64)",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "debuglantern: build debug bundle (amd64)",
-      "type": "shell",
-      "command": "bash scripts/build_flutter_drm_release_amd64.sh example",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "debuglantern: build and debug on pi",
-      "type": "shell",
-      "command": "bash scripts/debuglantern_deploy.sh --arch arm64 --target ${input:dlTarget}",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "dependsOn": "debuglantern: build debug bundle (arm64)",
-      "problemMatcher": []
-    },
-    {
-      "label": "debuglantern: upload and debug on pi",
+      "label": "debuglantern: upload",
+      "detail": "Upload the existing dist/flutter-drm-arm64-debug bundle and start it under gdbserver",
       "type": "shell",
       "command": "bash scripts/debuglantern_deploy.sh --arch arm64 --target ${input:dlTarget}",
       "options": {
@@ -98,13 +72,14 @@
       "problemMatcher": []
     },
     {
-      "label": "debuglantern: build and deploy on pi (no debug)",
+      "label": "debuglantern: build & upload",
+      "detail": "Cross-compile the arm64 debug bundle, then upload and start it under gdbserver",
       "type": "shell",
-      "command": "bash scripts/debuglantern_deploy.sh --arch arm64 --target ${input:dlTarget} --no-debug",
+      "command": "mkdir -p .cache/pub .cache/ccache .cache/home && sg docker -c \"docker run --rm -t --user $(id -u):$(id -g) -e HOME=/workspace/.cache/home -e PUB_CACHE=/workspace/.cache/pub -e CCACHE_DIR=/workspace/.cache/ccache -e HOST_ROOT_DIR='${workspaceFolder}' -v '${workspaceFolder}:/workspace' -w /workspace openautobridge-flutter-cross-arm64 bash scripts/build_flutter_drm_release_arm64.sh example\" && bash scripts/debuglantern_deploy.sh --arch arm64 --target ${input:dlTarget}",
+      "dependsOn": "docker: build builder image (arm64 cross)",
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "dependsOn": "debuglantern: build debug bundle (arm64)",
       "problemMatcher": []
     },
     {

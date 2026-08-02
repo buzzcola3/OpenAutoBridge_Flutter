@@ -62,6 +62,12 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE Threads::Threads)
 
 ## OpenAutoTransport (prebuilt) fetch + link
 set(OPENAUTO_TRANSPORT_VERSION "v0.0.28" CACHE STRING "OpenAutoTransport release tag" FORCE)
+# When cross-compiling, CMAKE_SYSTEM_PROCESSOR reports the host, not the target,
+# so allow the variant to be pinned from the environment. `flutter build linux`
+# offers no way to forward -D flags, which makes this the only injection point.
+if(NOT DEFINED OPENAUTO_TRANSPORT_VARIANT AND DEFINED ENV{OPENAUTO_TRANSPORT_VARIANT})
+  set(OPENAUTO_TRANSPORT_VARIANT "$ENV{OPENAUTO_TRANSPORT_VARIANT}")
+endif()
 if(NOT DEFINED OPENAUTO_TRANSPORT_VARIANT)
   string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _proc)
   if(_proc MATCHES "x86_64|amd64")

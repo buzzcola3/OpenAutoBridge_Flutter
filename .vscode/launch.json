@@ -41,7 +41,7 @@
       "printCalls": false
     },
     {
-      "name": "Deploy & Debug on Pi (DebugLantern)",
+      "name": "Build, Upload & Debug on Pi (DebugLantern)",
       "type": "gdb",
       "request": "attach",
       "executable": "${workspaceFolder}/dist/flutter-drm-arm64-debug/flutter-drm-embedder",
@@ -49,7 +49,7 @@
       "target": "| ${workspaceFolder}/scripts/dl-connect.sh",
       "cwd": "${workspaceFolder}",
       "gdbpath": "${workspaceFolder}/scripts/gdb-remote.sh",
-      "preLaunchTask": "debuglantern: deploy & debug",
+      "preLaunchTask": "debuglantern: build & upload",
       "autorun": [
         "source .gdbinit-remote"
       ],
@@ -64,7 +64,7 @@
       "target": "| ${workspaceFolder}/scripts/dl-connect.sh",
       "cwd": "${workspaceFolder}",
       "gdbpath": "${workspaceFolder}/scripts/gdb-remote.sh",
-      "preLaunchTask": "debuglantern: upload existing bundle",
+      "preLaunchTask": "debuglantern: upload",
       "autorun": [
         "source .gdbinit-remote"
       ],

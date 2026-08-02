@@ -24,10 +24,12 @@ extension TouchActionCode on TouchAction {
         return 1;
       case TouchAction.moved:
         return 2;
+      // 3 and 4 are unassigned in the protocol's PointerAction enum; the
+      // multi-touch actions are 5 and 6.
       case TouchAction.pointerDown:
-        return 3;
+        return 5;
       case TouchAction.pointerUp:
-        return 4;
+        return 6;
     }
   }
 }

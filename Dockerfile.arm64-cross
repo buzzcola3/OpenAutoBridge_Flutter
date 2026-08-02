@@ -1,0 +1,240 @@
+# syntax=docker/dockerfile:1.7
+# Native-speed arm64 cross-compiling builder for OpenAutoBridge Flutter.
+#
+# Unlike the emulated arm64 image, this runs entirely on amd64 and cross-compiles
+# to aarch64 with clang. Nothing executes under qemu, so builds run at native speed.
+#
+# Why this works:
+#   * flutter-drm-bundler never compiles anything - it downloads prebuilt aarch64
+#     embedder binaries and AOT-compiles Dart via gen_snapshot, both native on x86.
+#   * The plugin's prebuilt OpenAutoTransport deps (libcapnp/libkj/libopen_auto_transport)
+#     are fetched per-variant by linux/CMakeLists.txt, so Cap'n Proto never needs
+#     to be built from source.
+#   * Only the plugin's own C++ needs aarch64 codegen, which clang does natively.
+FROM ubuntu:24.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG LLVM_VERSION=18
+ARG FLUTTER_VERSION=3.38.6
+ARG FLUTTER_CHANNEL=stable
+
+ENV FLUTTER_HOME=/opt/flutter
+ENV PATH="${FLUTTER_HOME}/bin:${PATH}"
+
+# --- multiarch apt: amd64 from archive.ubuntu.com, arm64 from ports.ubuntu.com ---
+# Ubuntu's main archive carries no arm64, so the default sources must be pinned to
+# amd64 or every arm64 package lookup 404s.
+RUN <<'EOF' bash -e
+sed -i 's|^URIs: http://archive.ubuntu.com/ubuntu/|Architectures: amd64\nURIs: http://archive.ubuntu.com/ubuntu/|' \
+  /etc/apt/sources.list.d/ubuntu.sources
+sed -i 's|^URIs: http://security.ubuntu.com/ubuntu/|Architectures: amd64\nURIs: http://security.ubuntu.com/ubuntu/|' \
+  /etc/apt/sources.list.d/ubuntu.sources
+cat > /etc/apt/sources.list.d/ubuntu-ports.sources <<'PORTS'
+Types: deb
+Architectures: arm64
+URIs: http://ports.ubuntu.com/ubuntu-ports/
+Suites: noble noble-updates noble-backports noble-security
+Components: main universe restricted multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+PORTS
+dpkg --add-architecture arm64
+EOF
+
+# --- host (amd64) toolchain + build tooling ---
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl git xz-utils unzip zip file python3 \
+      pkg-config ninja-build cmake ccache \
+      clang-${LLVM_VERSION} lld-${LLVM_VERSION} \
+    && ln -sf /usr/bin/clang-${LLVM_VERSION}   /usr/bin/clang \
+    && ln -sf /usr/bin/clang++-${LLVM_VERSION} /usr/bin/clang++ \
+    && ln -sf /usr/bin/ld.lld-${LLVM_VERSION}  /usr/bin/ld.lld \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- target (arm64) sysroot libraries, installed via multiarch ---
+# These are the -dev packages linux/CMakeLists.txt resolves through pkg-config:
+# GTK3, epoxy, GStreamer (core/app/video/allocators/audio), plus libc++ for the
+# OpenAutoTransport prebuilt ABI.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libgcc-13-dev:arm64 \
+      libgtk-3-dev:arm64 \
+      libepoxy-dev:arm64 \
+      libgstreamer1.0-dev:arm64 \
+      libgstreamer-plugins-base1.0-dev:arm64 \
+      libc++-${LLVM_VERSION}-dev:arm64 \
+      libc++abi-${LLVM_VERSION}-dev:arm64 \
+      libstdc++-13-dev:arm64 \
+      liblzma-dev:arm64 \
+      libglu1-mesa-dev:arm64 \
+      libx11-dev:arm64 libxi-dev:arm64 libxrandr-dev:arm64 \
+      libxinerama-dev:arm64 libxcursor-dev:arm64 \
+    && rm -rf /var/lib/apt/lists/*
+
+# GStreamer's .pc lists libunwind as a dependency but Ubuntu ships no libunwind.pc,
+# which breaks pkg_check_modules. Provide a shim for the arm64 path.
+RUN mkdir -p /usr/lib/aarch64-linux-gnu/pkgconfig \
+  && printf '%s\n' \
+       'prefix=/usr' \
+       'libdir=${prefix}/lib/aarch64-linux-gnu' \
+       'Name: libunwind' \
+       'Description: libunwind pkg-config shim' \
+       'Version: 1' \
+       'Libs: -lunwind' \
+       'Cflags:' \
+     > /usr/lib/aarch64-linux-gnu/pkgconfig/libunwind.pc
+
+# --- Cap'n Proto headers (headers only - no compilation) ---------------------
+# linux/CMakeLists.txt fetches prebuilt libcapnp/libkj static libs, but the
+# OpenAutoTransport header wire.capnp.h still #includes <capnp/...>, so the
+# headers must be present. Ubuntu ships 1.0.1 which would ABI-mismatch the
+# 1.1.0 prebuilts, so the matching headers are extracted straight from the
+# release tarball. Nothing is built - this costs seconds, not minutes.
+ARG CAPNP_VERSION=1.1.0
+RUN curl -fsSL "https://capnproto.org/capnproto-c++-${CAPNP_VERSION}.tar.gz" -o /tmp/capnp.tar.gz \
+  && tar -xzf /tmp/capnp.tar.gz -C /tmp \
+  && cd "/tmp/capnproto-c++-${CAPNP_VERSION}/src" \
+  && find capnp kj -name '*.h' -exec install -Dm644 '{}' /usr/include/'{}' ';' \
+  && rm -rf /tmp/capnp.tar.gz "/tmp/capnproto-c++-${CAPNP_VERSION}" \
+  && test -f /usr/include/capnp/generated-header-support.h
+
+# --- cross compiler wrappers -------------------------------------------------
+# example/linux/CMakeLists.txt hardcodes `set(CMAKE_C_COMPILER "/usr/bin/clang")`,
+# which overrides CC/CXX from the environment. Since this image only ever
+# cross-builds for aarch64, /usr/bin/clang is replaced by the cross wrapper so the
+# hardcoded path resolves to the right target without patching the app's CMake.
+#
+# -fuse-ld=lld is required: clang otherwise invokes the host GNU ld, which only
+# knows x86 emulations and fails with "unrecognised emulation mode: aarch64linux".
+#
+# -Qunused-arguments is needed because -fuse-ld=lld is unused on compile-only
+# (-c) invocations, and the app's -Werror turns that warning into a hard error.
+RUN rm -f /usr/bin/clang /usr/bin/clang++ \
+  && printf '%s\n' '#!/bin/sh' \
+      'exec clang-'"${LLVM_VERSION}"' --target=aarch64-linux-gnu -fuse-ld=lld -Qunused-arguments "$@"' \
+      > /usr/bin/clang \
+  && printf '%s\n' '#!/bin/sh' \
+      'exec clang++-'"${LLVM_VERSION}"' --target=aarch64-linux-gnu -fuse-ld=lld -Qunused-arguments "$@"' \
+      > /usr/bin/clang++ \
+  && chmod +x /usr/bin/clang /usr/bin/clang++ \
+  && ln -sf /usr/bin/clang   /usr/local/bin/aarch64-clang \
+  && ln -sf /usr/bin/clang++ /usr/local/bin/aarch64-clang++
+
+# pkg-config must resolve arm64 .pc files only; leaving the amd64 paths visible
+# makes it silently link host libraries.
+ENV PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+ENV PKG_CONFIG_SYSROOT_DIR=/
+ENV PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
+ENV PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
+
+# --- Flutter SDK (x64 host SDK; it cross-targets linux-arm64) ----------------
+# The official x64 tarball avoids the arm64 git-clone + precache path entirely.
+# Defaults are UID-agnostic so the image still works when run as a non-root user
+# without any -e overrides; callers point these at persistent .cache/ dirs.
+ENV PUB_CACHE=/tmp/pub-cache
+ENV CCACHE_DIR=/tmp/ccache
+ENV HOME=/tmp
+RUN curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/${FLUTTER_CHANNEL}/linux/flutter_linux_${FLUTTER_VERSION}-${FLUTTER_CHANNEL}.tar.xz" \
+      | tar -xJ -C /opt \
+  && git config --global --add safe.directory '*' \
+  && flutter config --enable-linux-desktop --no-analytics \
+  && flutter precache --linux
+
+# --- remove flutter_tools' x64->arm64 cross-build guard ----------------------
+# The refusal lives in the *command* layer, not the build system, and upstream
+# marks it TODO(fujino) / flutter#74929 - i.e. unimplemented, not impossible. The
+# underlying CMake build cross-compiles fine with the toolchain configured above.
+#
+# The patch asserts its pattern matched, so bumping FLUTTER_VERSION fails here at
+# image-build time rather than silently restoring the guard.
+RUN <<'PY' python3
+import sys
+p = '/opt/flutter/packages/flutter_tools/lib/src/commands/build_linux.dart'
+src = open(p).read()
+needle = """    if (_operatingSystemUtils.hostPlatform == HostPlatform.linux_x64 &&
+        targetPlatform == TargetPlatform.linux_arm64) {
+      throwToolExit(
+        'Cross-build from Linux x64 host to Linux arm64 target is not currently supported.',
+      );
+    }"""
+if needle not in src:
+    sys.exit(
+        'PATCH FAILED: the x64->arm64 cross-build guard was not found in\n'
+        f'  {p}\n'
+        'Flutter probably changed this code. Re-check the guard and update the\n'
+        'needle in Dockerfile.arm64-cross before bumping FLUTTER_VERSION.'
+    )
+open(p, 'w').write(src.replace(
+    needle,
+    '    // Cross-build guard removed by Dockerfile.arm64-cross (flutter#74929).',
+))
+print('Patched out the x64->arm64 cross-build guard.')
+PY
+
+# flutter_tools runs from a precompiled snapshot; drop it so the patched source
+# is recompiled on first invocation.
+RUN rm -f /opt/flutter/bin/cache/flutter_tools.snapshot \
+          /opt/flutter/bin/cache/flutter_tools.stamp \
+  && flutter --version >/dev/null
+
+# --- seed linux-arm64 engine artifacts ---------------------------------------
+# `flutter precache --linux` on an x64 host only fetches linux-x64, so the arm64
+# target artifacts are pulled directly from the engine bucket.
+#
+# gen_snapshot needs care: linux-arm64/artifacts.zip ships an *aarch64* binary
+# that cannot run here. The android-arm64-release bundle instead provides an
+# x86_64-hosted, arm64-targeting build (reports itself as "linux_simarm64"),
+# which is what makes cross AOT compilation possible at all.
+RUN <<'EOF' bash -e
+REV="$(cat /opt/flutter/bin/internal/engine.version)"
+BASE="https://storage.googleapis.com/flutter_infra_release/flutter/${REV}"
+ENGINE=/opt/flutter/bin/cache/artifacts/engine
+
+fetch_unzip() { # url dest
+  tmp=$(mktemp /tmp/art.XXXXXX.zip)
+  curl -fsSL "$1" -o "$tmp"
+  mkdir -p "$2"
+  unzip -o -q "$tmp" -d "$2"
+  rm -f "$tmp"
+}
+
+for mode in debug profile release; do
+  fetch_unzip "${BASE}/linux-arm64-${mode}/linux-arm64-flutter-gtk.zip" \
+              "${ENGINE}/linux-arm64-${mode}"
+done
+
+fetch_unzip "${BASE}/linux-arm64/artifacts.zip" "${ENGINE}/linux-arm64"
+
+# Replace the aarch64 gen_snapshot with the x64-hosted cross build and expose it
+# where the release/profile AOT targets look for it.
+fetch_unzip "${BASE}/android-arm64-release/linux-x64.zip" /tmp/xgs
+for mode in profile release; do
+  install -m755 /tmp/xgs/gen_snapshot "${ENGINE}/linux-arm64-${mode}/gen_snapshot"
+done
+install -m755 /tmp/xgs/gen_snapshot "${ENGINE}/linux-arm64/gen_snapshot"
+rm -rf /tmp/xgs
+
+# Fail loudly rather than producing a bundle that cannot run on the Pi.
+file "${ENGINE}/linux-arm64-release/libflutter_linux_gtk.so" | grep -q 'ARM aarch64' \
+  || { echo "libflutter_linux_gtk.so is not aarch64"; exit 1; }
+"${ENGINE}/linux-arm64-release/gen_snapshot" --version 2>&1 | grep -q 'simarm64' \
+  || { echo "gen_snapshot is not an x64-hosted arm64 cross build"; exit 1; }
+echo "Seeded linux-arm64 engine artifacts for engine ${REV}."
+EOF
+
+# --- allow running as the invoking host user ---------------------------------
+# Containers are run with --user $(id -u):$(id -g) so everything written into the
+# bind-mounted workspace is owned by the caller rather than root. Flutter still
+# needs to write stamps and regenerate bin/internal/engine.version at runtime, so
+# the SDK is made group/world writable. This is a disposable builder image, and
+# the alternative (baking in a fixed UID) breaks on any other machine.
+RUN chmod -R a+rwX /opt/flutter /tmp
+
+ENV CC="/usr/bin/clang"
+ENV CXX="/usr/bin/clang++"
+
+# linux/CMakeLists.txt picks the OpenAutoTransport prebuilt variant from
+# CMAKE_SYSTEM_PROCESSOR, which reports the x86_64 *host* when cross-compiling.
+# It honours a pre-set value, so pin the target variant explicitly.
+ENV OPENAUTO_TRANSPORT_VARIANT=arm64_gnu
+
+WORKDIR /workspace
+CMD ["/bin/bash"]
